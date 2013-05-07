@@ -3,9 +3,11 @@ module Main where
 import System.Environment       (getArgs )
 import System.Console.GetOpt 
 import Data.List
-import qualified Filesystem.Path.CurrentOS as OS
+import Data.Time.Clock
+import System.FSNotify          ( Event(Modified) )
 
-import Filesystem.Path ( FilePath )
+import qualified Data.Text as T
+
 import Prelude hiding (FilePath)
 
 import SOS
@@ -14,20 +16,19 @@ main :: IO ()
 main = do
     args <- getArgs
     case getOpt RequireOrder options args of
-        (flags,      [],   []) -> startWithOpts $ sort flags 
-        (    _, nonOpts,   []) -> error $ "unrecognized arguments: " ++ unwords nonOpts
-        (    _,       _, msgs) -> error $ concat msgs ++ usageInfo header options
+        (flags, exts,   []) -> startWithOpts (sort flags) exts 
+        (    _,    _, msgs) -> error $ concat msgs ++ usageInfo header options
 
-data Flag = Version | Command String | Directory FilePath deriving (Show, Eq, Ord)
+data Flag = Version | Initialize | Command String deriving (Show, Eq, Ord)
 
 options :: [OptDescr Flag]
 options = [ Option "vV" ["version"] (NoArg Version) "show version number"
+          , Option "iI" ["init"]    (NoArg Initialize) "run command at startup"
           , Option "cC" ["command"] (ReqArg Command "command") "command to run on change"
-          , Option "dD" ["directory"] (ReqArg (Directory . OS.decodeString) "directory") "directory to watch for changes"
           ]
 
 header :: String
-header = "usage: sos [vcdVCD]"
+header = "usage: sos [vV] [iI] cC [file extensions...]"
 
 version :: String
 version = intercalate "\n" [ "\nSteel Overseer 0.0.1.0"
@@ -35,12 +36,21 @@ version = intercalate "\n" [ "\nSteel Overseer 0.0.1.0"
                            , ""
                            ]
 
-startWithOpts :: [Flag] -> IO ()
-startWithOpts (Version:xs) = do
+startWithOpts :: [Flag] -> [String] -> IO ()
+startWithOpts (Version:xs) exts = do
     putStrLn version
-    startWithOpts xs
-startWithOpts (flag:[]) = case flag of
-   (Command cmd)   -> startWithOpts [Command cmd, Directory $ OS.decodeString "."]
-   (Directory dir) -> startWithOpts [Command "echo changed", Directory dir]
-startWithOpts [Command cmd, Directory dir] = steelOverseer cmd (dir :: FilePath)
-startWithOpts _ = startWithOpts [Command "echo changed", Directory $ OS.decodeString "."]
+    startWithOpts xs exts
+startWithOpts (Initialize:Command cmd:[]) exts = do
+    utc <- getCurrentTime
+    putStrLn $ intercalate "\n" [ "Initializing with your command:"
+                                , "    " ++ show cmd
+                                ]
+    performCommand Nothing (T.pack cmd) (Modified curdir utc)
+    startWithOpts [Command cmd] exts 
+startWithOpts [Command cmd] exts = steelOverseer cmd exts 
+startWithOpts xs exts = error $ usageInfo header options ++ extras
+    where extras = intercalate "\n    " [ "Cannot determine options:"
+                                        , show xs
+                                        , "With extensions:"
+                                        , show exts
+                                        ]

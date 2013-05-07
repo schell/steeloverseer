@@ -17,8 +17,12 @@ cabal-version:       >=1.8
 executable steeloverseer
   main-is:             Main.hs
   other-modules:       SOS
-  build-depends:       base ==4.5.*,
+  build-depends:       base >=4.5,
                        fsnotify >=0.0.11,
                        system-filepath >=0.4.7,
-                       process >= 1.1.0.2
+                       process >= 1.1.0.2,
+                       text >=0.11.2.3,
+                       time >=1.4,
+                       pipes >=3.2,
+                       stm >=2.4
             
