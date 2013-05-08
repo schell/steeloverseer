@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                steeloverseer
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            A tool that runs a command after files change on disk.
 -- description:         
 license:             MIT

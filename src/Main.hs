@@ -3,10 +3,6 @@ module Main where
 import System.Environment       (getArgs )
 import System.Console.GetOpt 
 import Data.List
-import Data.Time.Clock
-import System.FSNotify          ( Event(Modified) )
-
-import qualified Data.Text as T
 
 import Prelude hiding (FilePath)
 
@@ -19,11 +15,10 @@ main = do
         (flags, exts,   []) -> startWithOpts (sort flags) exts 
         (    _,    _, msgs) -> error $ concat msgs ++ usageInfo header options
 
-data Flag = Version | Initialize | Command String deriving (Show, Eq, Ord)
+data Flag = Version | Command String deriving (Show, Eq, Ord)
 
 options :: [OptDescr Flag]
 options = [ Option "vV" ["version"] (NoArg Version) "show version number"
-          , Option "iI" ["init"]    (NoArg Initialize) "run command at startup"
           , Option "cC" ["command"] (ReqArg Command "command") "command to run on change"
           ]
 
@@ -40,17 +35,12 @@ startWithOpts :: [Flag] -> [String] -> IO ()
 startWithOpts (Version:xs) exts = do
     putStrLn version
     startWithOpts xs exts
-startWithOpts (Initialize:Command cmd:[]) exts = do
-    utc <- getCurrentTime
-    putStrLn $ intercalate "\n" [ "Initializing with your command:"
-                                , "    " ++ show cmd
-                                ]
-    performCommand Nothing (T.pack cmd) (Modified curdir utc)
-    startWithOpts [Command cmd] exts 
 startWithOpts [Command cmd] exts = steelOverseer cmd exts 
-startWithOpts xs exts = error $ usageInfo header options ++ extras
-    where extras = intercalate "\n    " [ "Cannot determine options:"
-                                        , show xs
-                                        , "With extensions:"
-                                        , show exts
-                                        ]
+startWithOpts xs exts = error $ extras ++ usageInfo header options
+    where extras = if null xs && null exts 
+                   then "Needs at least some options."
+                   else intercalate "\n    " [ "Cannot determine options:"
+                                             , show xs
+                                             , "With extensions:"
+                                             , show exts
+                                             ]
