@@ -16,5 +16,5 @@ usage
       -c ADD_COMMAND    --command=ADD_COMMAND      add command to run on file event
       -e ADD_EXTENSION  --extension=ADD_EXTENSION  add file extension to watch for events
 
-<img src="screen.png" title="steel overseer screenshot" />
+<img src="https://raw.github.com/schell/steeloverseer/master/rsrc/screen.png" title="steel overseer screenshot" />
 
