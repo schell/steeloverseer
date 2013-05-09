@@ -14,7 +14,8 @@ main :: IO ()
 main = do
     args <- getArgs
     case getOpt Permute options args of
-        (opts, nonOpts, []) -> startWithOpts $ foldl (flip id) defaultOptions opts
+        (   [],    _,   []) -> error $ usageInfo header options
+        ( opts,    _,   []) -> startWithOpts $ foldl (flip id) defaultOptions opts
         (    _,    _, msgs) -> error $ concat msgs ++ usageInfo header options
 
 data Options = Options { optShowVersion :: Bool

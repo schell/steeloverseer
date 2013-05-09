@@ -19,7 +19,9 @@ import Prelude hiding   ( FilePath )
 
 type RunningProcess = IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
 
--- | A tuple to hold our changed file events, list of commands to run and possibly the currently running process, in case it's one that hasn't terminated.
+-- | A tuple to hold our changed file events, 
+-- list of commands to run and possibly the currently running process, 
+-- in case it's one that hasn't terminated.
 type SOSState = ([Event], [String], Maybe ProcessHandle)
 
 steelOverseer :: [String] -> [String] -> IO ()
@@ -57,9 +59,8 @@ performCommand mvar cmds event = do
             -- There is a hanging process.
             mExCode <- getProcessExitCode pid
             when (isNothing mExCode) $ do 
-                --interruptProcessGroupOf pid
                 terminateProcess pid
-                redPrint "Terminated hanging process."
+                putStrLn $ colorString ANSIRed "Terminated hanging process."
             startWriteProcess mvar cmds 1000000
             return ([event], cmds, Nothing)
 
@@ -108,18 +109,12 @@ colorPrint :: (Show a) => ANSIColor -> a -> IO ()
 colorPrint c = putStrLn . colorString c . show
     
 startMsg :: [String] -> [String] -> String 
-startMsg cmds exts = L.foldl (++) "" [ "Starting Steel Overseer to perform " 
+startMsg cmds exts = L.foldl (++) "" [ "Starting steeloverseer to perform " 
                                      , L.intercalate ", " $  quote cmds
                                      , " when files of type "
                                      , L.intercalate ", " $ quote exts
-                                     , " change in the current directory ("
-                                     , currentDir 
-                                     , ")\n"
+                                     , " change in the current directory.\n"
+                                     , "Hit enter to quit.\n"
                                      ]
 
-    where quote      = L.map (\s-> "\""++s++"\"")
-          currentDir = T.unpack $ case toText curdir of
-                                       Left p  -> p 
-                                       Right p -> p
-               
-            
+    where quote = L.map (\s-> "\""++s++"\"")
