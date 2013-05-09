@@ -3,23 +3,31 @@
 
 name:                steeloverseer
 version:             0.1.0.1
-synopsis:            A tool that runs a command after files change on disk.
--- description:         
+synopsis:            A tool that runs a list of commands after files change on disk.
+description:         A command line tool that responds to changes in certain files by running
+                     specific commands. Similar to the codemonitor project but simpler and
+                     (hopefully) cross platform.
 license:             MIT
 license-file:        LICENSE
 author:              Schell Scivally
 maintainer:          efsubenovex@gmail.com
--- copyright:           
+stability:           alpha
+bug-reports:         https://github.com/schell/steeloverseer/issues
+copyright:           Schell Scivally 2013
 category:            Development
 build-type:          Simple
 cabal-version:       >=1.8
+-- source
+source-repository head
+    type:              git
+    location:          git://github.com/schell/steeloverseer.git
 
 executable sos
   ghc-options:         -Wall -threaded
   hs-source-dirs:      src
   main-is:             Main.hs
   other-modules:       SOS
-  build-depends:       base >=4.5,
+  build-depends:       base >=4.5 && < 5,
                        fsnotify >=0.0.11,
                        system-filepath >=0.4.7,
                        process >= 1.1.0.2,
