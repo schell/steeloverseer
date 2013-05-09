@@ -1,8 +1,10 @@
+{-#LANGUAGE RecordWildCards #-}
 module Main where
 
 import System.Environment       (getArgs )
 import System.Console.GetOpt 
 import Data.List
+import Control.Monad
 
 import Prelude hiding (FilePath)
 
@@ -11,36 +13,45 @@ import SOS
 main :: IO ()
 main = do
     args <- getArgs
-    case getOpt RequireOrder options args of
-        (flags, exts,   []) -> startWithOpts (sort flags) exts 
+    case getOpt Permute options args of
+        (opts, nonOpts, []) -> startWithOpts $ foldl (flip id) defaultOptions opts
         (    _,    _, msgs) -> error $ concat msgs ++ usageInfo header options
 
-data Flag = Version | Command String deriving (Show, Eq, Ord)
+data Options = Options { optShowVersion :: Bool
+                       , optCommands    :: [String]
+                       , optExtensions  :: [String]
+                       } deriving (Show, Eq)
 
-options :: [OptDescr Flag]
-options = [ Option "vV" ["version"] (NoArg Version) "show version number"
-          , Option "cC" ["command"] (ReqArg Command "command") "command to run on change"
+defaultOptions :: Options
+defaultOptions = Options { optShowVersion = False
+                         , optCommands = []
+                         , optExtensions = []
+                         }
+
+options :: [OptDescr (Options -> Options)]
+options = [ Option "v" ["version"]
+              (NoArg (\opts -> opts { optShowVersion = True }))
+              "show version info"
+          , Option "c" ["command"]
+              (ReqArg (\c opts -> opts { optCommands = optCommands opts ++ [c] }) "ADD_COMMAND")
+              "add command to run on file event"
+          , Option "e" ["extension"]
+              (ReqArg (\e opts -> opts { optExtensions = optExtensions opts ++ [e] }) "ADD_EXTENSION")
+              "add file extension to watch for events"
           ]
-
+                         
 header :: String
-header = "usage: sos [vV] [iI] cC [file extensions...]"
+header = "Usage: sos [v] -c command -e file_extension"
 
 version :: String
-version = intercalate "\n" [ "\nSteel Overseer 0.0.1.0"
+version = intercalate "\n" [ "\nSteel Overseer 0.0.1.1"
                            , "    by Schell Scivally" 
                            , ""
                            ]
 
-startWithOpts :: [Flag] -> [String] -> IO ()
-startWithOpts (Version:xs) exts = do
-    putStrLn version
-    startWithOpts xs exts
-startWithOpts [Command cmd] exts = steelOverseer cmd exts 
-startWithOpts xs exts = error $ extras ++ usageInfo header options
-    where extras = if null xs && null exts 
-                   then "Needs at least some options."
-                   else intercalate "\n    " [ "Cannot determine options:"
-                                             , show xs
-                                             , "With extensions:"
-                                             , show exts
-                                             ]
+startWithOpts :: Options -> IO ()
+startWithOpts opts = do
+    let Options{..} = opts
+    when optShowVersion $ putStrLn version
+    steelOverseer optCommands optExtensions 
+     
