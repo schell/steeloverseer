@@ -45,7 +45,7 @@ header :: String
 header = "Usage: sos [v] -c command -e file_extension"
 
 version :: String
-version = intercalate "\n" [ "\nSteel Overseer 0.1.0.1"
+version = intercalate "\n" [ "\nSteel Overseer 0.1.0.2"
                            , "    by Schell Scivally" 
                            , ""
                            ]

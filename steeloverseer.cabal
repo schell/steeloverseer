@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                steeloverseer
-version:             0.1.0.1
+version:             0.1.0.2
 synopsis:            A tool that runs a list of commands after files change on disk.
 description:         A command line tool that responds to changes in certain files by running
                      specific commands. Similar to the codemonitor project but simpler and
@@ -13,6 +13,7 @@ author:              Schell Scivally
 maintainer:          efsubenovex@gmail.com
 stability:           alpha
 bug-reports:         https://github.com/schell/steeloverseer/issues
+homepage:            https://github.com/schell/steeloverseer
 copyright:           Schell Scivally 2013
 category:            Development
 build-type:          Simple
@@ -26,7 +27,7 @@ executable sos
   ghc-options:         -Wall -threaded
   hs-source-dirs:      src
   main-is:             Main.hs
-  other-modules:       SOS
+  other-modules:       SOS, ANSIColors
   build-depends:       base >=4.5 && < 5,
                        fsnotify >=0.0.11,
                        system-filepath >=0.4.7,
