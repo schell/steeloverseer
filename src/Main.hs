@@ -34,10 +34,10 @@ options = [ Option "v" ["version"]
               (NoArg (\opts -> opts { optShowVersion = True }))
               "show version info"
           , Option "c" ["command"]
-              (ReqArg (\c opts -> opts { optCommands = optCommands opts ++ [c] }) "ADD_COMMAND")
+              (ReqArg (\c opts -> opts { optCommands = optCommands opts ++ [c] }) "COMMAND")
               "add command to run on file event"
           , Option "e" ["extension"]
-              (ReqArg (\e opts -> opts { optExtensions = optExtensions opts ++ [e] }) "ADD_EXTENSION")
+              (ReqArg (\e opts -> opts { optExtensions = optExtensions opts ++ [e] }) "EXTENSION")
               "add file extension to watch for events"
           ]
                          
@@ -45,7 +45,7 @@ header :: String
 header = "Usage: sos [v] -c command -e file_extension"
 
 version :: String
-version = intercalate "\n" [ "\nSteel Overseer 0.0.1.1"
+version = intercalate "\n" [ "\nSteel Overseer 0.1.0.1"
                            , "    by Schell Scivally" 
                            , ""
                            ]
@@ -53,6 +53,7 @@ version = intercalate "\n" [ "\nSteel Overseer 0.0.1.1"
 startWithOpts :: Options -> IO ()
 startWithOpts opts = do
     let Options{..} = opts
+        haveOptions = not (null optCommands) && not (null optExtensions)
     when optShowVersion $ putStrLn version
-    steelOverseer optCommands optExtensions 
+    when haveOptions $ steelOverseer optCommands optExtensions 
      

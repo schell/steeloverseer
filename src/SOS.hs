@@ -34,7 +34,15 @@ steelOverseer cmds exts = do
       watchTree wm curdir predicate action
 
     _ <- getLine
+
+    mState <- tryTakeMVar mvar
+
+    case mState of
+        Just (_, _, Just pid) -> terminatePID pid
+        _ -> return ()
+    
     stopManager wm
+    putStrLn $ colorString ANSIGreen "Bye!"
 
 curdir :: OS.FilePath
 curdir = fromText $ T.pack "."
@@ -58,9 +66,7 @@ performCommand mvar cmds event = do
         Just ([], _, Just pid) -> do
             -- There is a hanging process.
             mExCode <- getProcessExitCode pid
-            when (isNothing mExCode) $ do 
-                terminateProcess pid
-                putStrLn $ colorString ANSIRed "Terminated hanging process."
+            when (isNothing mExCode) $ terminatePID pid
             startWriteProcess mvar cmds 1000000
             return ([event], cmds, Nothing)
 
@@ -71,8 +77,6 @@ performCommand mvar cmds event = do
         Just enp -> return enp
 
     putMVar mvar eventsAndProcess
-    
-        where 
 
 startWriteProcess :: MVar SOSState -> [String] -> Int -> IO () 
 startWriteProcess mvar [] _ = do
@@ -95,6 +99,11 @@ startWriteProcess mvar (cmd:cmds) delay = void $ forkIO $ do
                     cyanPrint exitCode
                     startWriteProcess mvar cmds 0
                 _           -> redPrint exitCode
+
+terminatePID :: ProcessHandle -> IO ()
+terminatePID pid = do
+    terminateProcess pid 
+    putStrLn $ colorString ANSIRed "Terminated hanging process."
 
 greenPrint :: (Show a) => a -> IO ()
 greenPrint = colorPrint ANSIGreen
