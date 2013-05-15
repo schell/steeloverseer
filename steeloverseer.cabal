@@ -2,19 +2,16 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                steeloverseer
-version:             0.1.0.2
-synopsis:            A tool that runs a list of commands after files change on disk.
-description:         A command line tool that responds to changes in certain files by running
-                     specific commands. Similar to the codemonitor project but simpler and
-                     (hopefully) cross platform.
-license:             MIT
+version:             0.2.0.0
+synopsis:            A file watcher. 
+description:         A command line tool that responds to filesystem events. Users can provide regular expressions to match on filepaths and shell commands to execute in serial when matches are found. Displays text using a subset of available primary colors.
+license:             BSD3
 license-file:        LICENSE
 author:              Schell Scivally
 maintainer:          efsubenovex@gmail.com
 stability:           alpha
 bug-reports:         https://github.com/schell/steeloverseer/issues
 homepage:            https://github.com/schell/steeloverseer
-copyright:           Schell Scivally 2013
 category:            Development
 build-type:          Simple
 cabal-version:       >=1.8
@@ -35,5 +32,6 @@ executable sos
                        text >=0.11.2.3,
                        time >=1.4,
                        pipes >=3.2,
-                       stm >=2.4
+                       stm >=2.4,
+                       regex-tdfa >=1.1.8
             

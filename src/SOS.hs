@@ -8,6 +8,7 @@ import System.Exit
 import Control.Monad
 import Control.Concurrent
 import Data.Maybe
+import Text.Regex.TDFA
 
 import Filesystem.Path.CurrentOS as OS
 import Data.Text as T
@@ -24,14 +25,14 @@ type RunningProcess = IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandl
 -- in case it's one that hasn't terminated.
 type SOSState = ([Event], [String], Maybe ProcessHandle)
 
-steelOverseer :: [String] -> [String] -> IO ()
-steelOverseer cmds exts = do
-    putStrLn $ startMsg cmds exts
+steelOverseer :: FilePath -> [String] -> [String] -> IO ()
+steelOverseer dir cmds exts = do
+    putStrLn "Hit enter to quit.\n" 
     wm <- startManager
     mvar <- newEmptyMVar
-    let predicate = actionPredicateForExts $ L.map T.pack exts
+    let predicate = actionPredicateForRegexes exts
         action    = performCommand mvar cmds in
-      watchTree wm curdir predicate action
+      watchTree wm dir predicate action
 
     _ <- getLine
 
@@ -42,14 +43,16 @@ steelOverseer cmds exts = do
         _ -> return ()
     
     stopManager wm
-    putStrLn $ colorString ANSIGreen "Bye!"
 
-curdir :: OS.FilePath
-curdir = fromText $ T.pack "."
+actionPredicateForRegexes :: [String] -> Event -> Bool
+actionPredicateForRegexes ptns event = or (fmap (filepath =~) ptns :: [Bool])
+    where filepath = case toText $ eventPath event of
+                         Left f  -> T.unpack f
+                         Right f -> T.unpack f
 
-actionPredicateForExts :: [Text] -> Event -> Bool 
+actionPredicateForExts :: [String] -> Event -> Bool 
 actionPredicateForExts exts event = let maybeExt = extension $ eventPath event in
-    case maybeExt of
+    case fmap T.unpack maybeExt of
         Just ext -> ext `elem` exts
         Nothing  -> False 
 
@@ -81,7 +84,7 @@ performCommand mvar cmds event = do
 startWriteProcess :: MVar SOSState -> [String] -> Int -> IO () 
 startWriteProcess mvar [] _ = do
     _ <- tryTakeMVar mvar
-    putStrLn $ colorString ANSIGreen "Done."
+    return ()
 
 startWriteProcess mvar (cmd:cmds) delay = void $ forkIO $ do
     threadDelay delay
@@ -96,7 +99,7 @@ startWriteProcess mvar (cmd:cmds) delay = void $ forkIO $ do
             exitCode <- waitForProcess pId
             case exitCode of 
                 ExitSuccess -> do
-                    cyanPrint exitCode
+                    greenPrint exitCode
                     startWriteProcess mvar cmds 0
                 _           -> redPrint exitCode
 
@@ -105,25 +108,3 @@ terminatePID pid = do
     terminateProcess pid 
     putStrLn $ colorString ANSIRed "Terminated hanging process."
 
-greenPrint :: (Show a) => a -> IO ()
-greenPrint = colorPrint ANSIGreen
-
-cyanPrint :: (Show a) => a -> IO ()
-cyanPrint = colorPrint ANSICyan 
-
-redPrint :: (Show a) => a -> IO ()
-redPrint = colorPrint ANSIRed 
-
-colorPrint :: (Show a) => ANSIColor -> a -> IO ()
-colorPrint c = putStrLn . colorString c . show
-    
-startMsg :: [String] -> [String] -> String 
-startMsg cmds exts = L.foldl (++) "" [ "Starting steeloverseer to perform " 
-                                     , L.intercalate ", " $  quote cmds
-                                     , " when files of type "
-                                     , L.intercalate ", " $ quote exts
-                                     , " change in the current directory.\n"
-                                     , "Hit enter to quit.\n"
-                                     ]
-
-    where quote = L.map (\s-> "\""++s++"\"")

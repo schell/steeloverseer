@@ -8,20 +8,20 @@ Steel Overseer
 
 It is
 -----
-A tool that runs a list of commands after files change on disk. 
-A file watcher.
+A command line tool that responds to filesystem events. Users can provide regular expressions to match on filepaths and shell commands to execute in serial when matches are found. Displays text using a subset of available primary colors.
 
 Installation
 ------------
-After cloning and cd'ing into the repo run ```cabal install```, which should install the ```sos``` executable in your $HOME/.cabal/bin.
+Using cabal, ```cabal install steeloverseer```.
 
 Usage
 -----
-    sos: Usage: sos [v] -c command -e file_extension
-      -v                --version                  show version info
-      -c ADD_COMMAND    --command=ADD_COMMAND      add command to run on file event
-      -e ADD_EXTENSION  --extension=ADD_EXTENSION  add file extension to watch for events
+    sos: Usage: sos [v] -c command -p pattern
+      -v            --version              show version info
+      -c COMMAND    --command=COMMAND      add command to run on file event
+      -p PATTERN    --pattern=PATTERN      add pattern to match on file path
+      -d DIRECTORY  --directory=DIRECTORY  set directory to watch for changes (default is ./)
 
-<img src="https://raw.github.com/schell/steeloverseer/master/rsrc/screen.png" title="steel overseer screenshot" />
+<img src="https://raw.github.com/schell/steeloverseer/master/rsrc/screenv0.2.0.0.png" title="steel overseer screenshot" />
 
 [Art above by Chris Rahn for Wizards of the Coast](http://gatherer.wizards.com/Pages/Card/Details.aspx?multiverseid=205036 "Steel Overseer")

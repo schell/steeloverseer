@@ -1,6 +1,6 @@
 *.o
 *.hi
-*.swp
+*.sw*
 sos
 dist/**
 .DS_Store

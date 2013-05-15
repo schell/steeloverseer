@@ -1,13 +1,13 @@
 {-#LANGUAGE RecordWildCards #-}
 module Main where
 
-import System.Environment       (getArgs )
+import System.Environment        (getArgs)
 import System.Console.GetOpt 
 import Data.List
 import Control.Monad
-
-import Prelude hiding (FilePath)
-
+import Filesystem.Path.CurrentOS hiding (concat, null)
+import Data.Text as T            hiding (foldl, concat, intercalate, null)
+import Prelude                   hiding (FilePath)
 import SOS
 
 main :: IO ()
@@ -20,13 +20,15 @@ main = do
 
 data Options = Options { optShowVersion :: Bool
                        , optCommands    :: [String]
-                       , optExtensions  :: [String]
+                       , optPatterns  :: [String]
+                       , optDirectory   :: FilePath
                        } deriving (Show, Eq)
 
 defaultOptions :: Options
 defaultOptions = Options { optShowVersion = False
                          , optCommands = []
-                         , optExtensions = []
+                         , optPatterns = []
+                         , optDirectory = fromText $ T.pack "."
                          }
 
 options :: [OptDescr (Options -> Options)]
@@ -36,16 +38,19 @@ options = [ Option "v" ["version"]
           , Option "c" ["command"]
               (ReqArg (\c opts -> opts { optCommands = optCommands opts ++ [c] }) "COMMAND")
               "add command to run on file event"
-          , Option "e" ["extension"]
-              (ReqArg (\e opts -> opts { optExtensions = optExtensions opts ++ [e] }) "EXTENSION")
-              "add file extension to watch for events"
+          , Option "p" ["pattern"]
+              (ReqArg (\e opts -> opts { optPatterns = optPatterns opts ++ [e] }) "PATTERN")
+              "add pattern to match on file path" 
+          , Option "d" ["directory"]
+              (ReqArg (\d opts -> opts { optDirectory = decodeString d }) "DIRECTORY")
+              "set directory to watch for changes (default is ./)"
           ]
                          
 header :: String
-header = "Usage: sos [v] -c command -e file_extension"
+header = "Usage: sos [v] -c command -p pattern"
 
 version :: String
-version = intercalate "\n" [ "\nSteel Overseer 0.1.0.2"
+version = intercalate "\n" [ "\nSteel Overseer 0.2.0.0"
                            , "    by Schell Scivally" 
                            , ""
                            ]
@@ -53,7 +58,9 @@ version = intercalate "\n" [ "\nSteel Overseer 0.1.0.2"
 startWithOpts :: Options -> IO ()
 startWithOpts opts = do
     let Options{..} = opts
-        haveOptions = not (null optCommands) && not (null optExtensions)
+        haveOptions   = not (null optPatterns)
+        patternsValid = and $ fmap (not . null) optPatterns
     when optShowVersion $ putStrLn version
-    when haveOptions $ steelOverseer optCommands optExtensions 
+    unless patternsValid $ error "One or more patterns are empty."
+    when (haveOptions && patternsValid) $ steelOverseer optDirectory optCommands optPatterns 
      

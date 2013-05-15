@@ -24,3 +24,16 @@ ansibow = [ ANSIBlack
 
 colorString :: ANSIColor -> String -> String
 colorString c s = show c ++ s ++ show ANSINone 
+
+greenPrint :: (Show a) => a -> IO ()
+greenPrint = colorPrint ANSIGreen
+
+cyanPrint :: (Show a) => a -> IO ()
+cyanPrint = colorPrint ANSICyan 
+
+redPrint :: (Show a) => a -> IO ()
+redPrint = colorPrint ANSIRed 
+
+colorPrint :: (Show a) => ANSIColor -> a -> IO ()
+colorPrint c = putStrLn . colorString c . show
+
