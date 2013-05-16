@@ -14,16 +14,16 @@ import Filesystem.Path.CurrentOS as OS
 import Data.Text as T
 import Data.List as L
 
-import System.IO        ( Handle )
-
 import Prelude hiding   ( FilePath )
-
-type RunningProcess = IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
 
 -- | A tuple to hold our changed file events, 
 -- list of commands to run and possibly the currently running process, 
 -- in case it's one that hasn't terminated.
-type SOSState = ([Event], [String], Maybe ProcessHandle)
+data SOSState = SOSIdle 
+              | SOSPending { accumulatedEvents :: [Event] }
+              | SOSRunning { runningProccess   :: ProcessHandle
+                           , pendingCommands   :: [String]
+                           }
 
 steelOverseer :: FilePath -> [String] -> [String] -> IO ()
 steelOverseer dir cmds exts = do
@@ -39,7 +39,7 @@ steelOverseer dir cmds exts = do
     mState <- tryTakeMVar mvar
 
     case mState of
-        Just (_, _, Just pid) -> terminatePID pid
+        Just (SOSRunning pid _) -> terminatePID pid 
         _ -> return ()
     
     stopManager wm
@@ -59,27 +59,27 @@ actionPredicateForExts exts event = let maybeExt = extension $ eventPath event i
 performCommand :: MVar SOSState -> [String] -> Event -> IO ()
 performCommand mvar cmds event = do
     cyanPrint event
-    mEvProc <- tryTakeMVar mvar
-    eventsAndProcess <- case mEvProc of
+    mSosState <- tryTakeMVar mvar
+    sosState  <- case mSosState of
         Nothing -> do 
             -- This is the first file to change and there is no running process. 
             startWriteProcess mvar cmds 1000000
-            return ([event], cmds, Nothing)
+            return $ SOSPending [event]
 
-        Just ([], _, Just pid) -> do
+        Just (SOSRunning pid _) -> do
             -- There is a hanging process.
             mExCode <- getProcessExitCode pid
             when (isNothing mExCode) $ terminatePID pid
             startWriteProcess mvar cmds 1000000
-            return ([event], cmds, Nothing)
+            return $ SOSPending [event]
 
-        Just (events, leftoverCmds, Nothing) -> 
+        Just (SOSPending events) ->
             -- SOS is waiting the 1sec delay for events before running the process. 
-            return (event:events, leftoverCmds, Nothing)
+            return $ SOSPending $ event:events
 
-        Just enp -> return enp
+        Just state -> return state
 
-    putMVar mvar eventsAndProcess
+    putMVar mvar sosState
 
 startWriteProcess :: MVar SOSState -> [String] -> Int -> IO () 
 startWriteProcess mvar [] _ = do
@@ -92,10 +92,11 @@ startWriteProcess mvar (cmd:cmds) delay = void $ forkIO $ do
     pId <- runCommand cmd
     mEvProcCurrent <- tryTakeMVar mvar
     case mEvProcCurrent of
-        Nothing -> putMVar mvar ([], cmds, Just pId)
+        -- This shouldn't ever happen.
+        Nothing -> putMVar mvar $ SOSRunning pId cmds
         
-        Just (_, _, _) -> void $ forkIO $ do
-            putMVar mvar ([], cmds, Just pId)
+        Just _ -> void $ forkIO $ do
+            putMVar mvar $ SOSRunning pId cmds 
             exitCode <- waitForProcess pId
             case exitCode of 
                 ExitSuccess -> do
