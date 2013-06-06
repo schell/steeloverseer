@@ -6,6 +6,8 @@ Steel Overseer
 > 
 > -Sargis Haz, artificer 
 
+[![Build Status](https://travis-ci.org/schell/steeloverseer.png?branch=master)](https://travis-ci.org/schell/steeloverseer)
+
 It is
 -----
 A command line tool that responds to filesystem events. 
