@@ -1,0 +1,4 @@
+language: haskell
+notifications:
+    email: true
+    irc: irc.freenode.net#schellsan
