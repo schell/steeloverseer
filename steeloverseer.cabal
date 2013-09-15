@@ -31,7 +31,6 @@ executable sos
                        process >= 1.1.0.2,
                        text >=0.11.2.3,
                        time >=1.4,
-                       pipes >=3.2,
                        stm >=2.4,
                        regex-tdfa >=1.1.8
 
