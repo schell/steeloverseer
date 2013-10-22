@@ -56,4 +56,13 @@ Usage
 
 <img src="https://raw.github.com/schell/steeloverseer/master/rsrc/screenv0.2.0.0.png" title="steel overseer screenshot" />
 
+Future
+------
+For the next release I have planned a couple improvements:
+
+* Use numbered capturing groups in commands.
+* Daemon mode.
+
+Since the project has been pretty stable for a while this next release will be 1.0.
+
 [Art above by Chris Rahn for Wizards of the Coast](http://gatherer.wizards.com/Pages/Card/Details.aspx?multiverseid=205036 "Steel Overseer")
