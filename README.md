@@ -60,8 +60,8 @@ Future
 ------
 For the next release I have planned a couple improvements:
 
-* Use numbered capturing groups in commands.
-* Daemon mode.
+[ ] Use numbered capturing groups in commands.
+[x] Daemon mode.
 
 Since the project has been pretty stable for a while this next release will be 1.0.
 
