@@ -3,6 +3,7 @@ module Main where
 
 import System.Environment        (getArgs)
 import System.Console.GetOpt 
+import System.Posix.Daemon
 import Data.List
 import Control.Monad
 import Filesystem.Path.CurrentOS hiding (concat, null)
@@ -20,40 +21,42 @@ main = do
 
 data Options = Options { optShowVersion :: Bool
                        , optCommands    :: [String]
-                       , optPatterns  :: [String]
+                       , optPatterns    :: [String]
                        , optDirectory   :: FilePath
+                       , optIsDaemon    :: Bool
                        } deriving (Show, Eq)
 
 defaultOptions :: Options
 defaultOptions = Options { optShowVersion = False
-                         , optCommands = []
-                         , optPatterns = []
-                         , optDirectory = fromText $ T.pack "."
+                         , optCommands    = []
+                         , optPatterns    = []
+                         , optDirectory   = fromText $ T.pack "."
+                         , optIsDaemon    = False
                          }
 
 options :: [OptDescr (Options -> Options)]
 options = [ Option "v" ["version"]
               (NoArg (\opts -> opts { optShowVersion = True }))
-              "show version info"
+              "Show version info."
           , Option "c" ["command"]
               (ReqArg (\c opts -> opts { optCommands = optCommands opts ++ [c] }) "COMMAND")
-              "add command to run on file event"
+              "Add command to run on file event."
           , Option "p" ["pattern"]
               (ReqArg (\e opts -> opts { optPatterns = optPatterns opts ++ [e] }) "PATTERN")
-              "add pattern to match on file path" 
+              "Add pattern to match on file path." 
           , Option "d" ["directory"]
               (ReqArg (\d opts -> opts { optDirectory = decodeString d }) "DIRECTORY")
-              "set directory to watch for changes (default is ./)"
+              "Set directory to watch for changes (default is ./)."
+          , Option "b" ["daemon"]
+              (NoArg (\opts -> opts { optIsDaemon = True }))
+              "Attempt to run in the background as a daemon. When a previous daemon is running from your working directory this option will kill that process."
           ]
                          
 header :: String
-header = "Usage: sos [v] -c command -p pattern"
+header = "Usage: sos [vb] -c command -p pattern"
 
 version :: String
-version = intercalate "\n" [ "\nSteel Overseer 0.2.0.0"
-                           , "    by Schell Scivally" 
-                           , ""
-                           ]
+version = "\nSteel Overseer 1.0.0.0\n"
 
 startWithOpts :: Options -> IO ()
 startWithOpts opts = do
@@ -62,5 +65,17 @@ startWithOpts opts = do
         patternsValid = and $ fmap (not . null) optPatterns
     when optShowVersion $ putStrLn version
     unless patternsValid $ error "One or more patterns are empty."
-    when (haveOptions && patternsValid) $ steelOverseer optDirectory optCommands optPatterns 
-     
+    let runSteelOverseer = steelOverseer optDirectory optCommands optPatterns optIsDaemon
+    when (haveOptions && patternsValid) $ 
+        if not optIsDaemon 
+          then runSteelOverseer 
+          else do shouldKillPrev <- isRunning pIdFile
+                  when shouldKillPrev $ do
+                      putStrLn "Killing previous steeloverseer daemon..."
+                      killAndWait pIdFile 
+                      putStrLn "Done."
+                  unless shouldKillPrev $ do
+                      putStrLn "Running in the background as a daemon, logging output to sos.log."
+                      runDetached (Just pIdFile) (ToFile logFile) runSteelOverseer
+
+

@@ -2,14 +2,14 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                steeloverseer
-version:             0.2.0.0
+version:             1.0.0.0
 synopsis:            A file watcher.
-description:         A command line tool that responds to filesystem events. Users can provide regular expressions to match on filepaths and shell commands to execute in serial when matches are found. Displays text using a subset of available primary colors.
+description:         A command line tool that responds to filesystem events. Allows the user to automatically execute commands after files are added or updated. Watches files using regular expressions. Can be invoked interactively or as a daemon.
 license:             BSD3
 license-file:        LICENSE
 author:              Schell Scivally
 maintainer:          efsubenovex@gmail.com
-stability:           alpha
+stability:           stable
 bug-reports:         https://github.com/schell/steeloverseer/issues
 homepage:            https://github.com/schell/steeloverseer
 category:            Development
@@ -32,5 +32,8 @@ executable sos
                        text >=0.11.2.3,
                        time >=1.4,
                        stm >=2.4,
-                       regex-tdfa >=1.1.8
+                       regex-tdfa >=1.1.8,
+                       daemons >=0.2.1,
+                       unix >=2.6.0.1
+
 

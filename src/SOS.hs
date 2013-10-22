@@ -1,22 +1,23 @@
+{-# LANGUAGE OverloadedStrings #-}
 module SOS where
 
-import ANSIColors
 
-import System.FSNotify
-import System.Process
-import System.Exit
-import Control.Monad
-import Control.Concurrent
-import Data.Maybe
-import Text.Regex.TDFA
+import           ANSIColors
+import           System.FSNotify
+import           System.Process
+import           System.Exit
+import           System.Posix.Signals
+import           System.Posix.Daemon
+import           Control.Monad
+import           Control.Concurrent
+import           Data.Maybe
+import           Text.Regex.TDFA
+import           Filesystem.Path.CurrentOS as OS
+import           Prelude hiding   ( FilePath )
+import qualified Data.Text as T
+import qualified Prelude
 
-import Filesystem.Path.CurrentOS as OS
-import Data.Text as T
-import Data.List as L
-
-import Prelude hiding   ( FilePath )
-
--- | A tuple to hold our changed file events, 
+-- | A structure to hold our changed file events, 
 -- list of commands to run and possibly the currently running process, 
 -- in case it's one that hasn't terminated.
 data SOSState = SOSIdle 
@@ -25,24 +26,42 @@ data SOSState = SOSIdle
                            , pendingCommands   :: [String]
                            }
 
-steelOverseer :: FilePath -> [String] -> [String] -> IO ()
-steelOverseer dir cmds exts = do
-    putStrLn "Hit enter to quit.\n" 
+pIdFile :: Prelude.FilePath
+pIdFile = "sos.pid"
+
+logFile :: Prelude.FilePath
+logFile = "sos.log"
+
+steelOverseer :: FilePath -> [String] -> [String] -> Bool -> IO ()
+steelOverseer dir cmds exts isDaemon = do
+    unless isDaemon $ putStrLn "Hit enter to quit.\n" 
     wm <- startManager
     mvar <- newEmptyMVar
+
     let predicate = actionPredicateForRegexes exts
-        action    = performCommand mvar cmds in
-      watchTree wm dir predicate action
+        action    = performCommand mvar cmds
+    watchTree wm dir predicate action
 
-    _ <- getLine
+    unless isDaemon $ do 
+        _ <- getLine
+        cleanup wm mvar
+        
+    when isDaemon $ do
+        -- Install a sigkill handler to cleanup when the daemon is killed.
+        _ <- installHandler sigQUIT (Catch $ cleanup wm mvar) Nothing 
+        forever $ threadDelay 1000000 
 
+cleanup :: WatchManager -> MVar SOSState -> IO ()
+cleanup wm mvar = do
+    putStrLn "Cleaning up."
     mState <- tryTakeMVar mvar
-
     case mState of
         Just (SOSRunning pid _) -> terminatePID pid 
         _ -> return ()
-    
     stopManager wm
+
+    isDaemon <- isRunning pIdFile 
+    when isDaemon $ brutalKill pIdFile
 
 actionPredicateForRegexes :: [String] -> Event -> Bool
 actionPredicateForRegexes ptns event = or (fmap (filepath =~) ptns :: [Bool])
