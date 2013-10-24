@@ -42,6 +42,18 @@ For extensions it may make sense to use the endline matcher:
 
     sos -c "git status" -c "echo hi world" -p "hs$|md$"
 
+Daemon Mode
+-----------
+You can start steeloverseer in daemon mode by passing ```--daemon start``` with your
+other options: 
+
+    sos -c "cabal build" -p "hs$|cabal$|tpl" --daemon start
+
+This will create two files in you current directory - sos.pid and sos.log. 
+To stop the daemon simply cd back to that same directory and run:
+    
+    sos --daemon stop
+
 Installation
 ------------
 Using cabal, ```cabal install steeloverseer```.
