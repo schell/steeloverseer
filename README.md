@@ -19,32 +19,32 @@ Specifically
 ------------
 A filesystem event occurs when a file is added, deleted or updated. 
 If this event happens in the directory you specified using 
-```-d DIRECTORY```, steeloverseer will match the event's filepath 
-against the patterns you provided with ```-p PATTERN```.
+`-d DIRECTORY`, steeloverseer will match the event's filepath 
+against the patterns you provided with `-p PATTERN`.
 If a match is found steeloverseer will run the commands provided 
-with ```-c COMMAND``` in serial until all exit successfully, one fails or one hangs.
+with `-c COMMAND` in serial until all exit successfully, one fails or one hangs.
 
 You can provide multiple patterns and multiple commands, ie:
 
     sos -c "git status" -c "echo hi world" -p "hs" -p "md"
     
-This will execute ```git status``` followed by ```echo hi world``` 
-whenever files matching "hs" or "md" are changed. ```-d DIRECTORY``` 
-is not provided above, so it's assumed to be ```./```.
+This will execute `git status` followed by `echo hi world` 
+whenever files matching "hs" or "md" are changed. `-d DIRECTORY` 
+is not provided above, so it's assumed to be `./`.
 
-Also, since ```-p PATTERN``` are regular expressions we can do the same as above with:
+Also, since `-p PATTERN` are regular expressions we can do the same as above with:
 
     sos -c "git status" -c "echo hi world" -p "hs|md"
     
 Of course this would run whenever any match on "hs|md" is found, 
-for instance on the filepath ```/Users/home/mdman/file.txt```.
+for instance on the filepath `/Users/home/mdman/file.txt`.
 For extensions it may make sense to use the endline matcher:
 
     sos -c "git status" -c "echo hi world" -p "hs$|md$"
 
 Installation
 ------------
-Using cabal, ```cabal install steeloverseer```.
+Using cabal, `cabal install steeloverseer`.
 
 Usage
 -----
