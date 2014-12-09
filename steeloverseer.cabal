@@ -2,9 +2,9 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                steeloverseer
-version:             1.1.0.0
+version:             1.1.0.2
 synopsis:            A file watcher.
-description:         A command line tool that responds to filesystem events. Allows the user to automatically execute commands after files are added or updated. Watches files using regular expressions. Can be invoked interactively or as a daemon.
+description:         A command line tool that responds to filesystem events. Allows the user to automatically execute commands after files are added or updated. Watches files using regular expressions.
 license:             BSD3
 license-file:        LICENSE
 author:              Schell Scivally
@@ -24,8 +24,8 @@ executable sos
   ghc-options:         -Wall -threaded
   hs-source-dirs:      src
   main-is:             Main.hs
-  other-modules:       SOS, ANSIColors
-  build-depends:       base >=4.5 && < 5,
+  other-modules:       Sos, ANSIColors
+  build-depends:       base >=4.5 && <4.8,
                        fsnotify >=0.0.11,
                        system-filepath >=0.4.7,
                        process >= 1.1.0.2,
@@ -33,5 +33,4 @@ executable sos
                        time >=1.4,
                        regex-tdfa >=1.1.8,
                        unix >=2.6.0.1
-
 
