@@ -50,7 +50,7 @@ header :: String
 header = "Usage: sos [vb] -c command -p pattern"
 
 version :: String
-version = "\nSteel Overseer 1.1.0.3\n"
+version = "\nSteel Overseer 1.1.0.4\n"
 
 startWithOpts :: Options -> IO ()
 startWithOpts opts = do
