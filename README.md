@@ -10,23 +10,26 @@ Steel Overseer
 
 It is
 -----
-A command line tool that responds to filesystem events. 
-Users can provide regular expressions to match on filepaths 
-and shell commands to execute in serial when matches are found. 
-Displays text using a subset of available primary colors.
+A development tool that runs commands when certain files are updated, added or
+deleted.
+
+Steeloverseer watches files whose names match a regular expression and then 
+runs a series of commands when those files are updated. 
 
 Specifically
 ------------
 A filesystem event occurs when a file is added, deleted or updated. 
-If this event happens in the directory you specified using 
-`-d DIRECTORY`, steeloverseer will match the event's filepath 
-against the patterns you provided with `-p PATTERN`.
-If a match is found steeloverseer will run the commands provided 
-with `-c COMMAND` in serial until all exit successfully, one fails or one hangs.
+If this event happens on a file that matches one of the patterns provided with 
+the `-p PATTERN` flag then steeloverseer will run the commands provided 
+with the `-c COMMAND` flag. These commands will be performed in serial until 
+one hangs, fails or all exit successfully.
 
 You can provide multiple patterns and multiple commands, ie:
 
     sos -c "git status" -c "echo hi world" -p "hs" -p "md"
+
+You can seperately specify the directory to run in with `-d DIRECTORY`. The 
+default is `.`.
     
 This will execute `git status` followed by `echo hi world` 
 whenever files matching "hs" or "md" are changed. `-d DIRECTORY` 
@@ -54,7 +57,7 @@ Usage
       -p PATTERN    --pattern=PATTERN      add pattern to match on file path
       -d DIRECTORY  --directory=DIRECTORY  set directory to watch for changes (default is ./)
 
-<img src="https://raw.github.com/schell/steeloverseer/master/rsrc/screenv0.2.0.0.png" title="steel overseer screenshot" />
+<img src="http://zyghost.com/images/sos.gif" title="steel overseer screencast" width="800" />
 
 Future
 ------
