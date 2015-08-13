@@ -1,6 +1,6 @@
 Steel Overseer
 ==============
-> <img src="https://raw.github.com/schell/steeloverseer/master/rsrc/pic.jpg" width="300" title="flavor text" />
+> ![flavor text](https://raw.github.com/schell/steeloverseer/master/rsrc/pic.jpg)
 >
 > The world is already run by all manner of machines. One day, they'll remind us of that fact. 
 > 
