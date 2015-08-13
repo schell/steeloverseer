@@ -3,11 +3,7 @@ module Main where
 
 import System.Environment        (getArgs)
 import System.Console.GetOpt
-import Data.List
 import Control.Monad
-import Filesystem.Path.CurrentOS hiding (concat, null)
-import Data.Text as T            hiding (foldl, concat, intercalate, null)
-import Prelude                   hiding (FilePath)
 import SOS
 
 main :: IO ()
@@ -28,7 +24,7 @@ defaultOptions :: Options
 defaultOptions = Options { optShowVersion = False
                          , optCommands    = []
                          , optPatterns    = []
-                         , optDirectory   = fromText $ T.pack "."
+                         , optDirectory   = "."
                          }
 
 options :: [OptDescr (Options -> Options)]
@@ -42,7 +38,7 @@ options = [ Option "v" ["version"]
               (ReqArg (\e opts -> opts { optPatterns = optPatterns opts ++ [e] }) "pattern")
               "Add pattern to match on file path."
           , Option "d" ["directory"]
-              (ReqArg (\d opts -> opts { optDirectory = decodeString d }) "directory")
+              (ReqArg (\d opts -> opts { optDirectory = d }) "directory")
               "Set directory to watch for changes (default is ./)."
           ]
 

@@ -1,18 +1,15 @@
-{-# LANGUAGE OverloadedStrings #-}
 module SOS where
 
-
-import           ANSIColors
-import           System.FSNotify
-import           System.Process
-import           System.Exit
-import           Control.Monad
-import           Control.Concurrent
-import           Data.Maybe
-import           Text.Regex.TDFA
-import           Filesystem.Path.CurrentOS as OS
-import           Prelude hiding   ( FilePath )
-import qualified Data.Text as T
+import  System.FSNotify
+import  System.Process
+import  System.Exit
+import  System.FilePath
+import  System.Console.ANSI
+import  Control.Monad
+import  Control.Concurrent
+import  Data.Maybe
+import  Text.Regex.TDFA
+import  Prelude hiding   ( FilePath )
 
 -- | A structure to hold our changed file events,
 -- list of commands to run and possibly the currently running process,
@@ -47,16 +44,8 @@ cleanup wm mvar = do
     stopManager wm
 
 actionPredicateForRegexes :: [String] -> Event -> Bool
-actionPredicateForRegexes ptns event = or (fmap (filepath =~) ptns :: [Bool])
-    where filepath = case toText $ eventPath event of
-                         Left f  -> T.unpack f
-                         Right f -> T.unpack f
-
-actionPredicateForExts :: [String] -> Event -> Bool
-actionPredicateForExts exts event = let maybeExt = extension $ eventPath event in
-    case fmap T.unpack maybeExt of
-        Just ext -> ext `elem` exts
-        Nothing  -> False
+actionPredicateForRegexes ptns event =
+    or (fmap (eventPath event =~) ptns :: [Bool])
 
 performCommand :: MVar SOSState -> [String] -> Event -> IO ()
 performCommand mvar cmds event = do
@@ -90,7 +79,12 @@ startWriteProcess mvar [] _ = do
 
 startWriteProcess mvar (cmd:cmds) delay = void $ forkIO $ do
     threadDelay delay
-    putStrLn $ colorString ANSIGreen "\n> " ++ cmd ++ "\n"
+
+    setSGR [SetColor Foreground Dull Green]
+    putStr "\n> "
+    setSGR [Reset]
+    putStrLn cmd
+
     pId <- runCommand cmd
     mEvProcCurrent <- tryTakeMVar mvar
     case mEvProcCurrent of
@@ -109,5 +103,19 @@ startWriteProcess mvar (cmd:cmds) delay = void $ forkIO $ do
 terminatePID :: ProcessHandle -> IO ()
 terminatePID pid = do
     terminateProcess pid
-    putStrLn $ colorString ANSIRed "Terminated hanging process."
+    putStrLnColor Red "Terminated hanging process."
 
+cyanPrint :: Show a => a -> IO ()
+cyanPrint = putStrLnColor Cyan . show
+
+redPrint :: Show a => a -> IO ()
+redPrint = putStrLnColor Red . show
+
+greenPrint :: Show a => a -> IO ()
+greenPrint = putStrLnColor Green . show
+
+putStrLnColor :: Color -> String -> IO ()
+putStrLnColor c s = do
+    setSGR [SetColor Foreground Dull c]
+    putStrLn s
+    setSGR [Reset]
