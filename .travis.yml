@@ -1,4 +1,6 @@
 language: haskell
+ghc: 7.8
+sudo: false
 notifications:
     email: true
     irc: irc.freenode.net#schellsan
