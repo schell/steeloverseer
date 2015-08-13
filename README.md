@@ -57,7 +57,7 @@ Usage
       -p PATTERN    --pattern=PATTERN      add pattern to match on file path
       -d DIRECTORY  --directory=DIRECTORY  set directory to watch for changes (default is ./)
 
-<img src="http://zyghost.com/images/sos.gif" title="steel overseer screencast" width="800" />
+![steeloverseer screencast](http://zyghost.com/images/sos.gif)
 
 Future
 ------
