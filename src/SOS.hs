@@ -18,24 +18,19 @@ type Command = String
 type Pattern = String
 
 -- | Starts sos in a `dir` watching `ptns` to execute `cmds`.
-steelOverseer :: FilePath -> [Command] -> [Pattern] -> IO ()
+steelOverseer :: FilePath -> [Command] -> [Regex] -> IO ()
 steelOverseer dir cmds ptns = do
     putStrLn "Hit enter to quit."
     wm <- startManager
 
     mvar <- newMVar =<< async (pure ())
 
-    let predicate = actionPredicateForRegexes ptns
-        action    = performCommand mvar cmds
-    _ <- watchTree wm dir predicate action
+    let predicate = \event -> or (map (\ptn -> match ptn (eventPath event)) ptns)
+    _ <- watchTree wm dir predicate (performCommand mvar cmds)
 
     _ <- getLine
     takeMVar mvar >>= cancel
     stopManager wm
-
-actionPredicateForRegexes :: [Pattern] -> Event -> Bool
-actionPredicateForRegexes ptns event =
-    or (fmap (eventPath event =~) ptns :: [Bool])
 
 performCommand :: MVar (Async ()) -> [Command] -> Event -> IO ()
 performCommand mvar cmds event = do

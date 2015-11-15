@@ -1,9 +1,13 @@
-{-#LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
+import Data.Either
 import Options.Applicative
 import SOS
+import Text.Regex.TDFA
+import Text.Regex.TDFA.String (compile)
+
 
 version :: String
 version = "Steel Overseer 1.1.0.4"
@@ -51,4 +55,8 @@ main' :: Options -> IO ()
 main' Options{..} = do
     if optShowVersion
         then putStrLn version
-        else steelOverseer optDirectory optCommands optPatterns
+        else do
+            let regexs = map (compile defaultCompOpt defaultExecOpt) optPatterns
+            case lefts regexs of
+                []   -> steelOverseer optDirectory optCommands (rights regexs)
+                errs -> mapM_ putStrLn errs
