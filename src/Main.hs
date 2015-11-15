@@ -1,59 +1,62 @@
-{-#LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards #-}
+
 module Main where
 
-import System.Environment        (getArgs)
-import System.Console.GetOpt
-import Control.Monad
+import Data.Either
+import Options.Applicative
 import SOS
+import Text.Regex.TDFA
+import Text.Regex.TDFA.String (compile)
 
-main :: IO ()
-main = do
-    args <- getArgs
-    case getOpt Permute options args of
-        (   [],    _,   []) -> error $ usageInfo header options
-        ( opts,    _,   []) -> startWithOpts $ foldl (flip id) defaultOptions opts
-        (    _,    _, msgs) -> error $ concat msgs ++ usageInfo header options
-
-data Options = Options { optShowVersion :: Bool
-                       , optCommands    :: [String]
-                       , optPatterns    :: [String]
-                       , optDirectory   :: FilePath
-                       } deriving (Show, Eq)
-
-defaultOptions :: Options
-defaultOptions = Options { optShowVersion = False
-                         , optCommands    = []
-                         , optPatterns    = []
-                         , optDirectory   = "."
-                         }
-
-options :: [OptDescr (Options -> Options)]
-options = [ Option "v" ["version"]
-              (NoArg (\opts -> opts { optShowVersion = True }))
-              "Show version info."
-          , Option "c" ["command"]
-              (ReqArg (\c opts -> opts { optCommands = optCommands opts ++ [c] }) "command")
-              "Add command to run on file event."
-          , Option "p" ["pattern"]
-              (ReqArg (\e opts -> opts { optPatterns = optPatterns opts ++ [e] }) "pattern")
-              "Add pattern to match on file path."
-          , Option "d" ["directory"]
-              (ReqArg (\d opts -> opts { optDirectory = d }) "directory")
-              "Set directory to watch for changes (default is ./)."
-          ]
-
-header :: String
-header = "Usage: sos [vb] -c command -p pattern"
 
 version :: String
-version = "\nSteel Overseer 1.1.0.4\n"
+version = "Steel Overseer 1.1.0.4"
 
-startWithOpts :: Options -> IO ()
-startWithOpts opts = do
-    let Options{..} = opts
-        haveOptions   = not (null optPatterns)
-        patternsValid = and $ fmap (not . null) optPatterns
-    when optShowVersion $ putStrLn version
-    unless patternsValid $ error "One or more patterns are empty."
-    let runSteelOverseer = steelOverseer optDirectory optCommands optPatterns
-    when (haveOptions && patternsValid) runSteelOverseer
+data Options = Options
+    { optShowVersion :: Bool
+    , optCommands    :: [Command]
+    , optPatterns    :: [Pattern]
+    , optDirectory   :: FilePath
+    } deriving Show
+
+main :: IO ()
+main = execParser opts >>= main'
+  where
+    opts = info (helper <*> optsParser)
+        ( fullDesc
+       <> progDesc "A file watcher and development tool."
+       <> header version )
+
+    optsParser :: Parser Options
+    optsParser = Options
+        <$> switch
+            ( long "version"
+           <> short 'v'
+           <> help "Show version info." )
+        <*> some (strOption
+            ( long "command"
+           <> short 'c'
+           <> help "Add command to run on file event."
+           <> metavar "COMMAND" ))
+        <*> some (strOption
+            ( long "pattern"
+           <> short 'p'
+           <> help "Add pattern to match on file path."
+           <> metavar "PATTERN" ))
+        <*> strOption
+            ( long "directory"
+           <> short 'd'
+           <> help "Set directory to watch for changes."
+           <> value "."
+           <> showDefault
+           <> metavar "DIRECTORY" )
+
+main' :: Options -> IO ()
+main' Options{..} = do
+    if optShowVersion
+        then putStrLn version
+        else do
+            let regexs = map (compile defaultCompOpt defaultExecOpt) optPatterns
+            case lefts regexs of
+                []   -> steelOverseer optDirectory optCommands (rights regexs)
+                errs -> mapM_ putStrLn errs
