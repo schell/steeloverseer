@@ -17,29 +17,46 @@ import System.Process
 type Command = String
 type Pattern = String
 
--- | Starts sos in a `dir` watching `ptns` to execute `cmds`.
-steelOverseer :: FilePath -> [Command] -> [Regex] -> IO ()
-steelOverseer dir cmds ptns = do
+-- | Starts sos watching `target`, matching `ptns` to execute `cmds`.
+steelOverseer
+    :: FilePath
+    -> [Command]
+    -> [Regex]
+    -> (WatchManager -> FilePath -> ActionPredicate -> Action -> IO StopListening)
+    -> IO ()
+steelOverseer target cmds ptns watch_fn = do
     putStrLn "Hit enter to quit."
     wm <- startManager
 
     mvar <- newMVar =<< async (pure ())
 
     let predicate = \event -> or (map (\ptn -> match ptn (eventPath event)) ptns)
-    _ <- watchTree wm dir predicate (performCommand mvar cmds)
+    _ <- watch_fn wm target predicate (performCommand mvar cmds)
 
     _ <- getLine
     takeMVar mvar >>= cancel
     stopManager wm
 
 performCommand :: MVar (Async ()) -> [Command] -> Event -> IO ()
-performCommand mvar cmds event = do
-    putStrLn ""
-    putStrLnColor Cyan (showEvent event)
+performCommand mvar cmds0 event = do
+    case makeCmds cmds0 of
+        [] -> pure ()
+        cmds -> do
+            putStrLn ""
+            putStrLnColor Cyan (showEvent event)
 
-    modifyMVar_ mvar $ \a -> do
-        cancel a
-        async (runCommands cmds)
+            modifyMVar_ mvar $ \a -> do
+                cancel a
+                async (runCommands cmds)
+  where
+    -- If no commands were provided, infer the command based on filename.
+    makeCmds :: [Command] -> [Command]
+    makeCmds [] =
+        case takeExtension (eventPath event) of
+            ".hs"  -> ["stack ghc " ++ eventPath event]
+            ".erl" -> ["rebar compile"]
+            _      -> []
+    makeCmds cs = cs
 
 runCommands :: [Command] -> IO ()
 runCommands [] = pure ()
