@@ -26,14 +26,16 @@ executable sos
   hs-source-dirs:      src
   main-is:             Main.hs
   other-modules:       SOS
-  build-depends:       base >=4.5 && <4.9,
-                       async,
-                       directory,
-                       fsnotify >=0.2 && < 0.3,
-                       filepath >= 1.4 && < 1.5,
-                       ansi-terminal >= 0.6 && < 0.7,
-                       optparse-applicative,
-                       process >= 1.1.0.2,
-                       time >=1.4,
-                       regex-tdfa >=1.1.8,
-                       unix >=2.6.0.1
+  build-depends:       base
+                     , async
+                     , concurrent-output
+                     , directory
+                     , fsnotify
+                     , filepath
+                     , ansi-terminal
+                     , optparse-applicative
+                     , process
+                     , time
+                     , regex-tdfa
+                     , unix
+                     , yaml

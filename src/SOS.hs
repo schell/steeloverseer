@@ -1,4 +1,6 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module SOS where
 
@@ -6,51 +8,60 @@ import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Exception
 import Control.Monad
-import Text.Regex.TDFA
+import Data.Monoid
 import Prelude hiding (FilePath)
 import System.Console.ANSI
+import System.Console.Concurrent
 import System.Exit
 import System.FilePath
 import System.FSNotify
 import System.Process
+import Text.Regex.TDFA
 
-type Command = String
-type Pattern = String
+data RunningCommand = RunningCommand
+    { cmdThread   :: MVar (Async ()) -- ^ Currently running command (might be done, who knows)
+    , cmdPattern  :: Regex
+    , cmdCommands :: [String]
+    }
 
 -- | Starts sos watching `target`, matching `ptns` to execute `cmds`.
 steelOverseer
     :: FilePath
-    -> [Command]
-    -> [Regex]
+    -> [(Regex, [String])]
     -> (WatchManager -> FilePath -> ActionPredicate -> Action -> IO StopListening)
     -> IO ()
-steelOverseer target cmds ptns watch_fn = do
-    putStrLn "Hit enter to quit."
-    wm <- startManager
+steelOverseer target cmd_infos watch_fn = withConcurrentOutput $ do
+    outputConcurrentLn "Hit enter to quit."
 
-    mvar <- newMVar =<< async (pure ())
+    withManager $ \wm -> do
+        runningCmds <- mapM (\(ptn, cmd) -> do
+                                mv <- newMVar =<< async (pure ())
+                                pure (RunningCommand mv ptn cmd))
+                            cmd_infos
 
-    let predicate = \event -> or (map (\ptn -> match ptn (eventPath event)) ptns)
-    _ <- watch_fn wm target predicate (performCommand mvar cmds)
+        let predicate = \event -> or (map (\(ptn,_) -> match ptn (eventPath event)) cmd_infos)
+        _ <- watch_fn wm target predicate $ \event -> do
+            outputConcurrentLn ("\n" <> colored Cyan (showEvent event))
+            mapM_ (handleEvent event) runningCmds
 
-    _ <- getLine
-    takeMVar mvar >>= cancel
-    stopManager wm
+        _ <- getLine
+        mapM_ (\rc -> takeMVar (cmdThread rc) >>= cancel) runningCmds
 
-performCommand :: MVar (Async ()) -> [Command] -> Event -> IO ()
-performCommand mvar cmds0 event = do
-    case makeCmds cmds0 of
-        [] -> pure ()
-        cmds -> do
-            putStrLn ""
-            putStrLnColor Cyan (showEvent event)
-
-            modifyMVar_ mvar $ \a -> do
-                cancel a
-                async (runCommands cmds)
+handleEvent :: Event -> RunningCommand -> IO ()
+handleEvent event RunningCommand{..} = do
+    when (match cmdPattern (eventPath event)) $ do
+        case makeCmds cmdCommands of
+            [] -> pure ()
+            cmds -> do
+                a <- modifyMVar cmdThread $ \old_a -> do
+                    cancel old_a
+                    new_a <- async (runCommands cmds)
+                    pure (new_a, new_a)
+                _ <- waitCatch a
+                pure ()
   where
     -- If no commands were provided, infer the command based on filename.
-    makeCmds :: [Command] -> [Command]
+    makeCmds :: [String] -> [String]
     makeCmds [] =
         case takeExtension (eventPath event) of
             ".hs"  -> ["stack ghc " ++ eventPath event]
@@ -58,32 +69,33 @@ performCommand mvar cmds0 event = do
             _      -> []
     makeCmds cs = cs
 
-runCommands :: [Command] -> IO ()
+runCommands :: [String] -> IO ()
 runCommands [] = pure ()
 runCommands (cmd:cmds) = do
-    putStrColor Magenta "\n> "
-    putStrLn cmd
+    success <- bracketOnError (runCommand cmd) (\ph -> terminateProcess ph >> pure False) $ \ph -> do
+        outputConcurrentLn (colored Magenta "\n> " <> cmd)
 
-    bracketOnError (runCommand cmd) terminateProcess $ \ph -> do
         exitCode <- waitForProcess ph
         case exitCode of
             ExitSuccess -> do
-                putStrLnColor Green "Success ✓"
-                runCommands cmds
-            _ ->
-                putStrLnColor Red "Failure ✗"
+                outputConcurrentLn (colored Green "Success ✓")
+                pure True
+            _ -> do
+                outputConcurrentLn (colored Red "Failure ✗")
+                pure False
+    when success (runCommands cmds)
 
-putStrColor :: Color -> String -> IO ()
-putStrColor c s = do
-    setSGR [SetColor Foreground Dull c]
-    putStr s
-    setSGR [Reset]
+colored :: Color -> String -> String
+colored c s = color c <> s <> reset
 
-putStrLnColor :: Color -> String -> IO ()
-putStrLnColor c s = do
-    setSGR [SetColor Foreground Dull c]
-    putStrLn s
-    setSGR [Reset]
+color :: Color -> String
+color c = setSGRCode [SetColor Foreground Dull c]
+
+reset :: String
+reset = setSGRCode [Reset]
+
+outputConcurrentLn :: String -> IO ()
+outputConcurrentLn s = outputConcurrent (s <> "\n")
 
 showEvent :: Event -> String
 showEvent (Added fp _)    = "Added " ++ show fp
