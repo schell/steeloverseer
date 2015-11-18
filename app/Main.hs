@@ -120,7 +120,7 @@ handleEvent event cwd (cmdThread, CommandPlan{..}) = do
     let path = BS.pack (makeRelative cwd (eventPath event))
     case match cmdRegex path of
         [] -> pure ()
-        ((_:captures):_) -> do
+        (captures:_) -> do
             commands <- runSos (mapM (\t -> instantiateTemplate t captures) cmdTemplates)
 
             case commands of
