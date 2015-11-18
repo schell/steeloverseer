@@ -13,8 +13,8 @@ Changes from the original version:
 - pattern: src/(.*)\.c
   commands:
   - make
-  - make test --file=test/{0}_test.c
-- pattern: (.*\.hs)
+  - make test --file=test/{1}_test.c
+- pattern: .*\.hs
   commands:
   - hlint {0}
 ```
