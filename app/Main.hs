@@ -96,11 +96,11 @@ main' Options{..} = withConcurrentOutput $ do
 
     -- Queue of commands to run. The next list of commands to run is at the head
     -- of the list.
-    cmds_queue <- newTVarIO (Seq.empty)
+    cmds_queue_tvar <- newTVarIO (Seq.empty)
 
     cwd <- getCurrentDirectory
 
-    outputConcurrentLn "Hit enter to quit."
+    outputConcurrentLn "Hit Ctrl+C to quit."
 
     let eventRelPath :: Event -> FilePath
         eventRelPath = \event -> makeRelative cwd (eventPath event)
@@ -108,17 +108,55 @@ main' Options{..} = withConcurrentOutput $ do
         predicate :: Event -> Bool
         predicate = \event -> or (map (\plan -> match (cmdRegex plan) (eventRelPath event)) plans)
 
-    -- Spawn the thread that continually pops commands off the queue and runs
-    -- them.
-    withAsync (commandRunnerThread cmds_queue) $ \_ -> do
-        withManager $ \wm -> do
-            _ <- watchTree wm target predicate $ \event -> do
-                outputConcurrentLn ("\n" <> colored Cyan (showEvent event cwd))
-                let path = BS.pack (eventRelPath event)
-                mapM_ (handleEvent cmds_queue path) plans
+    withManager $ \wm -> do
+        _ <- watchTree wm target predicate $ \event -> do
+            outputConcurrentLn ("\n" <> colored Cyan (showEvent event cwd))
+            let path = BS.pack (eventRelPath event)
+            mapM_ (maybeEnqueueCommands cmds_queue_tvar path) plans
 
-            _ <- getLine
-            pure ()
+        forever $ do
+            (cmds, tmvar) <- atomically $ do
+                cmds_queue <- readTVar cmds_queue_tvar
+                case viewl cmds_queue of
+                    EmptyL -> retry
+                    ((cmds0, tmvar0) :< _) -> do
+                        -- Clear the TMVar which might have been set before we've even
+                        -- started running the commands.
+                        _ <- tryTakeTMVar tmvar0
+                        pure (cmds0, tmvar0)
+
+            -- Spawn a thread to run the commands, then wait on either that run to
+            -- finish *or* the same original TMVar to be signaled (so, a particular
+            -- pipeline of commands can only "interrupt" itself - all other concurrently
+            -- scheduled commands are simple enqueued.
+            let loop = do
+                    a <- async (runCommands cmds)
+
+                    result <- atomically $
+                        (do
+                            () <- waitSTM a
+                            -- Partial pattern matching is safe here because we're the
+                            -- only thread that removes from the command queue, and we
+                            -- just read a non-empty sequence from it above.
+                            modifyTVar' cmds_queue_tvar
+                                (\s -> case viewl s of
+                                           (_ :< rest) -> rest)
+                            pure True)
+                        <|> False <$ takeTMVar tmvar
+
+                    case result of
+                        -- Commands finished - go back to outer loop.
+                        True -> pure ()
+
+                        -- Another filesystem event triggered this list of commands
+                        -- to be run again - cancel the previous run and start over.
+                        False -> do
+                            cancel a
+                            _ <- waitCatch a
+                            loop
+            loop
+
+        pure ()
 
 type EnqueuedCommands = ([Command], TMVar ())
 type CommandsQueue = Seq EnqueuedCommands
@@ -126,8 +164,8 @@ type CommandsQueue = Seq EnqueuedCommands
 -- | If a plan's regex matches the file path, walk the commands queue - if we
 -- see we've already been enqueued, signal the TMVar. Otherwise, enqueue us at
 -- the end.
-handleEvent :: TVar CommandsQueue -> ByteString -> CommandPlan -> IO ()
-handleEvent cmds_queue_tvar path CommandPlan{..} = do
+maybeEnqueueCommands :: TVar CommandsQueue -> ByteString -> CommandPlan -> IO ()
+maybeEnqueueCommands cmds_queue_tvar path CommandPlan{..} = do
     case match cmdRegex path of
         [] -> pure ()
         (captures:_) -> do
@@ -144,49 +182,6 @@ handleEvent cmds_queue_tvar path CommandPlan{..} = do
                                     then void (tryPutTMVar tmvar ())
                                     else loop cmds_queue_tail
                 in readTVar cmds_queue_tvar >>= loop
-
-commandRunnerThread :: TVar CommandsQueue -> IO ()
-commandRunnerThread cmds_queue_tvar = forever $ do
-    (cmds, tmvar) <- atomically $ do
-        cmds_queue <- readTVar cmds_queue_tvar
-        case viewl cmds_queue of
-            EmptyL -> retry
-            ((cmds0, tmvar0) :< _) -> do
-                -- Clear the TMVar which might have been set before we've even
-                -- started running the commands.
-                _ <- tryTakeTMVar tmvar0
-                pure (cmds0, tmvar0)
-
-    -- Spawn a thread to run the commands, then wait on either that run to
-    -- finish *or* the same original TMVar to be signaled (so, a particular
-    -- pipeline of commands can only "interrupt" itself - all other concurrently
-    -- scheduled commands are simple enqueued.
-    let loop = do
-            a <- async (runCommands cmds)
-
-            result <- atomically $
-                (do
-                    () <- waitSTM a
-                    -- Partial pattern matching is safe here because we're the
-                    -- only thread that removes from the command queue, and we
-                    -- just read a non-empty sequence from it above.
-                    modifyTVar' cmds_queue_tvar
-                        (\s -> case viewl s of
-                                   (_ :< rest) -> rest)
-                    pure True)
-                <|> False <$ takeTMVar tmvar
-
-            case result of
-                -- Commands finished - go back to outer loop.
-                True -> pure ()
-
-                -- Another filesystem event triggered this list of commands
-                -- to be run again - cancel the previous run and start over.
-                False -> do
-                    cancel a
-                    _ <- waitCatch a
-                    loop
-    loop
 
 -- Run a list of shell commands sequentially. If a command returns ExitFailure
 -- or throws an exception, don't run the rest (and don't re-propagate the
