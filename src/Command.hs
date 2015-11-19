@@ -16,6 +16,7 @@ import Sos
 import Control.Monad.Except
 import Data.Aeson.Types
 import Data.ByteString            (ByteString)
+import Data.Either
 import Data.Monoid
 import Data.Text                  (Text)
 import Text.Megaparsec
@@ -94,7 +95,7 @@ flattenTemplate = go mempty
 --
 -- For example, this definition from a .sosrc yaml file is incorrect:
 --
---     - pattern: (.*.c)
+--     - pattern: .*.c
 --     - commands:
 --       - gcc -c {1}
 --
@@ -109,12 +110,30 @@ data CommandPlan = CommandPlan
 -- Build a command plan from a "raw" command plan by compiling the regex and
 -- parsing each command template.
 buildCommandPlan :: forall m. MonadError SosException m => ByteString -> [ByteString] -> m CommandPlan
-buildCommandPlan pattern templates = CommandPlan
-    <$> pure pattern
-    <*> case compile defaultCompOpt defaultExecOpt pattern of
+buildCommandPlan pattern templates0 = do
+    templates <- mapM parseCommandTemplate templates0
+
+    -- Improve performance for patterns with no capture groups.
+    let (comp_opt, exec_opt) =
+            case concatMap lefts templates of
+                [] -> ( CompOption
+                            { caseSensitive  = True
+                            , multiline      = False
+                            , rightAssoc     = True
+                            , newSyntax      = True
+                            , lastStarGreedy = True
+                            }
+                      , ExecOption
+                            { captureGroups = False }
+                      )
+                _ -> (defaultCompOpt, defaultExecOpt)
+
+    regex <-
+        case compile comp_opt exec_opt pattern of
             Left err -> throwError (SosRegexException pattern err)
             Right x  -> pure x
-    <*> mapM parseCommandTemplate templates
+
+    pure (CommandPlan pattern regex templates)
 
 -- A "raw" CommandPlan that is post-processed after being parsed from a yaml
 -- file. Namely, the regex is compiled and the commands are parsed into
