@@ -130,6 +130,8 @@ handleEvent path (cmdThread, CommandPlan{..}) = do
                 _ -> do
                     a <- modifyMVar cmdThread $ \old_a -> do
                         cancel old_a
+                        _ <- waitCatch old_a
+
                         new_a <- async (runCommands commands)
                         pure (new_a, new_a)
                     _ <- waitCatch a
@@ -142,16 +144,16 @@ runCommands cmds0 = go 1 cmds0
     go _ [] = pure ()
     go n (cmd:cmds) = do
         outputConcurrentLn (colored Magenta (printf "\n[%d/%d] " n (length cmds0)) <> cmd)
-        success <- bracketOnError (runCommand cmd) (\ph -> terminateProcess ph >> pure False) $ \ph -> do
-            exitCode <- waitForProcess ph
-            case exitCode of
-                ExitSuccess -> do
-                    outputConcurrentLn (colored Green "Success ✓")
-                    pure True
-                _ -> do
-                    outputConcurrentLn (colored Red "Failure ✗")
-                    pure False
-        when success (go (n+1) cmds)
+
+        mexception <- (callCommand cmd >> pure Nothing) `catch` (\e -> pure (Just e))
+        case mexception of
+            Nothing -> do
+                outputConcurrentLn (colored Green "Success ✓")
+                go (n+1) cmds
+            Just e ->
+                case fromException e of
+                    Just ThreadKilled -> pure ()
+                    _ -> outputConcurrentLn (colored Red "Failure ✗")
 
 --------------------------------------------------------------------------------
 
