@@ -5,18 +5,29 @@ A file watcher and development tool, similar to Ruby's [Guard](https://github.co
 
 Forked and extended from **https://github.com/schell/steeloverseer**
 
+Installation
+============
+
+Download and install the [stack](https://github.com/commercialhaskell/stack) build tool.
+
+    git clone https://github.com/mitchellwrosen/steeloverseer.git
+    cd steeloverseer
+    stack install
+
+This will create a binary deep inside `~/.stack/`, and symlink to it at
+`~/.local/bin/sos`.
+
 Usage
 =====
 
 `sos` requires a directory to watch, a list of commands to run, and an optional
-list of regex patterns to match on file paths. Capture groups can be created
-with `(` `)` and captured variables can be referred to with `{1}`, `{2}`, etc.
-(`{0}` contains the entire match).
+list of regex patterns to match on file paths (see `sos --help` for details).
 
-For example, for each `.c` file in `src/`, we may want to:
+Capture groups can be created with `(` `)` and captured variables can be
+referred to with `{1}`, `{2}`, etc. (`{0}` contains the entire match).
 
-- Compile the file
-- Run its corresponding unit test
+For example, for each change to a `.c` file in `src/`, we may want to compile
+the file and run its corresponding unit test:
 
     sos src/ -c "gcc -c {0} -o obj/{1}.o" -c "make test --filter=test/{1}_test.c" -p "src/(.*)\.c"
 
