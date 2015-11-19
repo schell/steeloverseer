@@ -4,7 +4,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Command
-    ( CommandPlan(..)
+    ( Command
+    , CommandPlan(..)
     , RawCommandPlan(..)
     , buildCommandPlan
     , buildRawCommandPlan

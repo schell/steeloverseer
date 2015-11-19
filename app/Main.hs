@@ -24,6 +24,7 @@ import System.Exit
 import System.FilePath
 import System.FSNotify
 import System.Process
+import Text.Printf
 import Text.Regex.TDFA
 
 import qualified Data.ByteString.Char8 as BS
@@ -68,7 +69,7 @@ main = execParser opts >>= main'
            <> metavar "PATTERN" )))
 
 main' :: Options -> IO ()
-main' Options{..} = do
+main' Options{..} = withConcurrentOutput $ do
     -- Parse .sosrc command plans.
     rc_plans <- parseSosrc
 
@@ -98,6 +99,7 @@ main' Options{..} = do
                 exitFailure
 
     cwd <- getCurrentDirectory
+    let eventRelPath = \event -> makeRelative cwd (eventPath event)
 
     outputConcurrentLn "Hit enter to quit."
 
@@ -107,17 +109,17 @@ main' Options{..} = do
                                 pure (mv, plan))
                             plans
 
-        let predicate = \event -> or (map (\plan -> match (cmdRegex plan) (eventPath event)) plans)
+        let predicate = \event -> or (map (\plan -> match (cmdRegex plan) (eventRelPath event)) plans)
+
         _ <- watchTree wm target predicate $ \event -> do
             outputConcurrentLn ("\n" <> colored Cyan (showEvent event cwd))
-            mapM_ (handleEvent event cwd) runningCmds
+            mapM_ (handleEvent (BS.pack (eventRelPath event))) runningCmds
 
         _ <- getLine
         mapM_ (\(mv, _) -> takeMVar mv >>= cancel) runningCmds
 
-handleEvent :: Event -> FilePath -> RunningCommand -> IO ()
-handleEvent event cwd (cmdThread, CommandPlan{..}) = do
-    let path = BS.pack (makeRelative cwd (eventPath event))
+handleEvent :: ByteString -> RunningCommand -> IO ()
+handleEvent path (cmdThread, CommandPlan{..}) = do
     case match cmdRegex path of
         [] -> pure ()
         (captures:_) -> do
@@ -133,21 +135,23 @@ handleEvent event cwd (cmdThread, CommandPlan{..}) = do
                     _ <- waitCatch a
                     pure ()
 
-runCommands :: [String] -> IO ()
-runCommands [] = pure ()
-runCommands (cmd:cmds) = do
-    success <- bracketOnError (runCommand cmd) (\ph -> terminateProcess ph >> pure False) $ \ph -> do
-        outputConcurrentLn (colored Magenta "\n> " <> cmd)
-
-        exitCode <- waitForProcess ph
-        case exitCode of
-            ExitSuccess -> do
-                outputConcurrentLn (colored Green "Success ✓")
-                pure True
-            _ -> do
-                outputConcurrentLn (colored Red "Failure ✗")
-                pure False
-    when success (runCommands cmds)
+runCommands :: [Command] -> IO ()
+runCommands cmds0 = go 1 cmds0
+  where
+    go :: Int -> [Command] -> IO ()
+    go _ [] = pure ()
+    go n (cmd:cmds) = do
+        outputConcurrentLn (colored Magenta (printf "\n[%d/%d] " n (length cmds0)) <> cmd)
+        success <- bracketOnError (runCommand cmd) (\ph -> terminateProcess ph >> pure False) $ \ph -> do
+            exitCode <- waitForProcess ph
+            case exitCode of
+                ExitSuccess -> do
+                    outputConcurrentLn (colored Green "Success ✓")
+                    pure True
+                _ -> do
+                    outputConcurrentLn (colored Red "Failure ✗")
+                    pure False
+        when success (go (n+1) cmds)
 
 --------------------------------------------------------------------------------
 
