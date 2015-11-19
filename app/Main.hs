@@ -8,12 +8,13 @@ module Main where
 import Command
 import Sos
 
-import Control.Concurrent
 import Control.Concurrent.Async
+import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Data.ByteString        (ByteString)
 import Data.Monoid
+import Data.Sequence          (Seq, ViewL(..), (|>), viewl)
 import Data.Yaml              (decodeFileEither, prettyPrintParseException)
 import Prelude                hiding (FilePath)
 import Options.Applicative
@@ -28,6 +29,7 @@ import Text.Printf
 import Text.Regex.TDFA
 
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.Sequence         as Seq
 
 version :: String
 version = "Steel Overseer 2.0"
@@ -37,12 +39,6 @@ data Options = Options
     , optCommands :: [ByteString]
     , optPatterns :: [ByteString]
     } deriving Show
-
--- A currently running command.
-type RunningCommand =
-    ( MVar (Async ()) -- Currently running command (might be finished)
-    , CommandPlan
-    )
 
 main :: IO ()
 main = execParser opts >>= main'
@@ -98,45 +94,103 @@ main' Options{..} = withConcurrentOutput $ do
                 putStrLn ("Target " ++ optTarget ++ " is not a file or directory.")
                 exitFailure
 
+    -- Queue of commands to run. The next list of commands to run is at the head
+    -- of the list.
+    cmds_queue <- newTVarIO (Seq.empty)
+
     cwd <- getCurrentDirectory
-    let eventRelPath = \event -> makeRelative cwd (eventPath event)
 
     outputConcurrentLn "Hit enter to quit."
 
-    withManager $ \wm -> do
-        runningCmds <- mapM (\plan -> do
-                                mv <- newMVar =<< async (pure ())
-                                pure (mv, plan))
-                            plans
+    let eventRelPath :: Event -> FilePath
+        eventRelPath = \event -> makeRelative cwd (eventPath event)
 
-        let predicate = \event -> or (map (\plan -> match (cmdRegex plan) (eventRelPath event)) plans)
+        predicate :: Event -> Bool
+        predicate = \event -> or (map (\plan -> match (cmdRegex plan) (eventRelPath event)) plans)
 
-        _ <- watchTree wm target predicate $ \event -> do
-            outputConcurrentLn ("\n" <> colored Cyan (showEvent event cwd))
-            mapM_ (handleEvent (BS.pack (eventRelPath event))) runningCmds
+    -- Spawn the thread that continually pops commands off the queue and runs
+    -- them.
+    withAsync (commandRunnerThread cmds_queue) $ \_ -> do
+        withManager $ \wm -> do
+            _ <- watchTree wm target predicate $ \event -> do
+                outputConcurrentLn ("\n" <> colored Cyan (showEvent event cwd))
+                let path = BS.pack (eventRelPath event)
+                mapM_ (handleEvent cmds_queue path) plans
 
-        _ <- getLine
-        mapM_ (\(mv, _) -> takeMVar mv >>= cancel) runningCmds
+            _ <- getLine
+            pure ()
 
-handleEvent :: ByteString -> RunningCommand -> IO ()
-handleEvent path (cmdThread, CommandPlan{..}) = do
+type EnqueuedCommands = ([Command], TMVar ())
+type CommandsQueue = Seq EnqueuedCommands
+
+-- | If a plan's regex matches the file path, walk the commands queue - if we
+-- see we've already been enqueued, signal the TMVar. Otherwise, enqueue us at
+-- the end.
+handleEvent :: TVar CommandsQueue -> ByteString -> CommandPlan -> IO ()
+handleEvent cmds_queue_tvar path CommandPlan{..} = do
     case match cmdRegex path of
         [] -> pure ()
         (captures:_) -> do
             commands <- runSos (mapM (\t -> instantiateTemplate t captures) cmdTemplates)
+            atomically $
+                let loop :: CommandsQueue -> STM ()
+                    loop cmds_queue =
+                        case viewl cmds_queue of
+                            EmptyL -> do
+                                tmvar <- newEmptyTMVar
+                                modifyTVar' cmds_queue_tvar (\s -> s |> (commands, tmvar))
+                            (commands', tmvar) :< cmds_queue_tail ->
+                                if commands == commands'
+                                    then void (tryPutTMVar tmvar ())
+                                    else loop cmds_queue_tail
+                in readTVar cmds_queue_tvar >>= loop
 
-            case commands of
-                [] -> pure ()
-                _ -> do
-                    a <- modifyMVar cmdThread $ \old_a -> do
-                        cancel old_a
-                        _ <- waitCatch old_a
+commandRunnerThread :: TVar CommandsQueue -> IO ()
+commandRunnerThread cmds_queue_tvar = forever $ do
+    (cmds, tmvar) <- atomically $ do
+        cmds_queue <- readTVar cmds_queue_tvar
+        case viewl cmds_queue of
+            EmptyL -> retry
+            ((cmds0, tmvar0) :< _) -> do
+                -- Clear the TMVar which might have been set before we've even
+                -- started running the commands.
+                _ <- tryTakeTMVar tmvar0
+                pure (cmds0, tmvar0)
 
-                        new_a <- async (runCommands commands)
-                        pure (new_a, new_a)
+    -- Spawn a thread to run the commands, then wait on either that run to
+    -- finish *or* the same original TMVar to be signaled (so, a particular
+    -- pipeline of commands can only "interrupt" itself - all other concurrently
+    -- scheduled commands are simple enqueued.
+    let loop = do
+            a <- async (runCommands cmds)
+
+            result <- atomically $
+                (do
+                    () <- waitSTM a
+                    -- Partial pattern matching is safe here because we're the
+                    -- only thread that removes from the command queue, and we
+                    -- just read a non-empty sequence from it above.
+                    modifyTVar' cmds_queue_tvar
+                        (\s -> case viewl s of
+                                   (_ :< rest) -> rest)
+                    pure True)
+                <|> False <$ takeTMVar tmvar
+
+            case result of
+                -- Commands finished - go back to outer loop.
+                True -> pure ()
+
+                -- Another filesystem event triggered this list of commands
+                -- to be run again - cancel the previous run and start over.
+                False -> do
+                    cancel a
                     _ <- waitCatch a
-                    pure ()
+                    loop
+    loop
 
+-- Run a list of shell commands sequentially. If a command returns ExitFailure
+-- or throws an exception, don't run the rest (and don't re-propagate the
+-- exception).
 runCommands :: [Command] -> IO ()
 runCommands cmds0 = go 1 cmds0
   where

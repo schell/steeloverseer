@@ -41,6 +41,7 @@ executable sos
                      , async
                      , bytestring
                      , concurrent-output
+                     , containers
                      , directory
                      , fsnotify
                      , filepath
@@ -49,6 +50,7 @@ executable sos
                      , process
                      , regex-tdfa
                      , steeloverseer
+                     , stm
                      , time
                      , text
                      , unix
