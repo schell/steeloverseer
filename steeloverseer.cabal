@@ -33,14 +33,13 @@ library
                      , yaml
 
 executable sos
-  ghc-options:         -Wall -O2 -threaded
+  ghc-options:         -Wall -threaded
   hs-source-dirs:      app
   main-is:             Main.hs
   build-depends:       base
                      , ansi-terminal
                      , async
                      , bytestring
-                     , concurrent-output
                      , containers
                      , directory
                      , fsnotify

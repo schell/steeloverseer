@@ -19,13 +19,11 @@ import Data.Yaml                 (decodeFileEither, prettyPrintParseException)
 import Prelude                   hiding (FilePath)
 import Options.Applicative
 import System.Console.ANSI
-import System.Console.Concurrent
 import System.Directory
 import System.Exit
 import System.FilePath
 import System.FSNotify
-import System.Process            hiding (createProcess, waitForProcess)
-import System.Process.Concurrent
+import System.Process
 import Text.Printf
 import Text.Regex.TDFA
 
@@ -66,7 +64,7 @@ main = execParser opts >>= main'
            <> metavar "PATTERN" )))
 
 main' :: Options -> IO ()
-main' Options{..} = withConcurrentOutput $ do
+main' Options{..} = do
     -- Parse .sosrc command plans.
     rc_plans <- parseSosrc
 
@@ -101,7 +99,7 @@ main' Options{..} = withConcurrentOutput $ do
 
     cwd <- getCurrentDirectory
 
-    outputConcurrentLn "Hit Ctrl+C to quit."
+    putStrLn "Hit Ctrl+C to quit."
 
     let eventRelPath :: Event -> FilePath
         eventRelPath = \event -> makeRelative cwd (eventPath event)
@@ -111,7 +109,7 @@ main' Options{..} = withConcurrentOutput $ do
 
     withManager $ \wm -> do
         _ <- watchTree wm target predicate $ \event -> do
-            outputConcurrentLn ("\n" <> colored Cyan (showEvent event cwd))
+            putStrLn ("\n" <> colored Cyan (showEvent event cwd))
             let path = BS.pack (eventRelPath event)
             mapM_ (maybeEnqueueCommands cmds_queue_tvar path) plans
 
@@ -135,23 +133,33 @@ main' Options{..} = withConcurrentOutput $ do
 
                     result <- atomically $
                         (do
-                            () <- waitSTM a
-                            -- Partial pattern matching is safe here because we're the
-                            -- only thread that removes from the command queue, and we
-                            -- just read a non-empty sequence from it above.
-                            modifyTVar' cmds_queue_tvar
-                                (\s -> case viewl s of
-                                           (_ :< rest) -> rest)
-                            pure True)
-                        <|> False <$ takeTMVar tmvar
+                            pollSTM a >>= \case
+                                Nothing -> retry
+                                Just r -> do
+                                    -- Partial pattern matching is safe here because we're the
+                                    -- only thread that removes from the command queue, and we
+                                    -- just read a non-empty sequence from it above.
+                                    modifyTVar' cmds_queue_tvar
+                                        (\s -> case viewl s of
+                                                   (_ :< rest) -> rest)
+                                    pure (Left r))
+                        <|> Right <$> takeTMVar tmvar
 
                     case result of
+                        -- Commands threw an exception - a ThreadKilled we are
+                        -- okay with, but anything else we should print to the
+                        -- console.
+                        Left (Left ex) -> do
+                            case fromException ex of
+                                Just ThreadKilled -> pure ()
+                                _ -> putStrLn (colored Red ("Exception: " ++ show ex))
+
                         -- Commands finished - go back to outer loop.
-                        True -> pure ()
+                        Left (Right ()) -> pure ()
 
                         -- Another filesystem event triggered this list of commands
                         -- to be run again - cancel the previous run and start over.
-                        False -> do
+                        Right () -> do
                             cancel a
                             _ <- waitCatch a
                             loop
@@ -171,6 +179,7 @@ maybeEnqueueCommands cmds_queue_tvar path CommandPlan{..} = do
         [] -> pure ()
         (captures:_) -> do
             commands <- runSos (mapM (instantiateTemplate captures) cmdTemplates)
+
             atomically $
                 let loop :: CommandsQueue -> STM ()
                     loop cmds_queue =
@@ -178,40 +187,34 @@ maybeEnqueueCommands cmds_queue_tvar path CommandPlan{..} = do
                             EmptyL -> do
                                 tmvar <- newEmptyTMVar
                                 modifyTVar' cmds_queue_tvar (\s -> s |> (commands, tmvar))
-                            (commands', tmvar) :< cmds_queue_tail ->
+
+                            (commands', tmvar) :< cmds_queue_tail -> do
                                 if commands == commands'
                                     then void (tryPutTMVar tmvar ())
                                     else loop cmds_queue_tail
+
                 in readTVar cmds_queue_tvar >>= loop
 
--- Run a list of shell commands sequentially. If a command returns ExitFailure
--- or throws an exception, don't run the rest (and don't re-propagate the
--- exception).
+-- Run a list of shell commands sequentially. If a command returns ExitFailure,
+-- don't run the rest.
 runCommands :: [Command] -> IO ()
 runCommands cmds0 = go 1 cmds0
   where
     go :: Int -> [Command] -> IO ()
     go _ [] = pure ()
     go n (cmd:cmds) = do
-        outputConcurrentLn (colored Magenta (printf "\n[%d/%d] " n (length cmds0)) <> cmd)
+        putStrLn (colored Magenta (printf "[%d/%d] " n (length cmds0)) <> cmd)
 
-        success <-
-            (do
-                (_, _, _, ph) <- createProcess (shell cmd)
-                waitForProcess ph >>= \case
-                    ExitSuccess -> do
-                        outputConcurrentLn (colored Green "Success ✓")
-                        pure True
-                    _ -> do
-                        outputConcurrentLn (colored Red "Failure ✗")
-                        pure False)
-            `catch` (\e -> do
-                case fromException e of
-                    Just ThreadKilled -> pure ()
-                    _ -> outputConcurrentLn (colored Red "Failure ✗")
-                pure False)
-
-        when success (go (n+1) cmds)
+        let create = (\(_, _, _, ph) -> ph) <$> createProcess (shell cmd)
+            teardown ph = do
+                putStrLn (colored Yellow ("Canceling: " ++ cmd))
+                terminateProcess ph
+        bracketOnError create teardown waitForProcess >>= \case
+            ExitSuccess -> do
+                putStrLn (colored Green "Success ✓")
+                go (n+1) cmds
+            _ ->
+                putStrLn (colored Red "Failure ✗")
 
 --------------------------------------------------------------------------------
 
@@ -242,10 +245,7 @@ color c = setSGRCode [SetColor Foreground Dull c]
 reset :: String
 reset = setSGRCode [Reset]
 
-outputConcurrentLn :: String -> IO ()
-outputConcurrentLn s = outputConcurrent (s <> "\n")
-
 showEvent :: Event -> FilePath -> String
-showEvent (Added fp _)    cwd = "Added "    ++ makeRelative cwd fp
-showEvent (Modified fp _) cwd = "Modified " ++ makeRelative cwd fp
-showEvent (Removed fp _)  cwd = "Removed "  ++ makeRelative cwd fp
+showEvent (Added fp _)    cwd = "Added: "    ++ makeRelative cwd fp
+showEvent (Modified fp _) cwd = "Modified: " ++ makeRelative cwd fp
+showEvent (Removed fp _)  cwd = "Removed: "  ++ makeRelative cwd fp
