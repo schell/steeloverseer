@@ -12,11 +12,11 @@ import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
-import Data.ByteString        (ByteString)
+import Data.ByteString           (ByteString)
 import Data.Monoid
-import Data.Sequence          (Seq, ViewL(..), (|>), viewl)
-import Data.Yaml              (decodeFileEither, prettyPrintParseException)
-import Prelude                hiding (FilePath)
+import Data.Sequence             (Seq, ViewL(..), (|>), viewl)
+import Data.Yaml                 (decodeFileEither, prettyPrintParseException)
+import Prelude                   hiding (FilePath)
 import Options.Applicative
 import System.Console.ANSI
 import System.Console.Concurrent
@@ -24,7 +24,8 @@ import System.Directory
 import System.Exit
 import System.FilePath
 import System.FSNotify
-import System.Process
+import System.Process            hiding (createProcess, waitForProcess)
+import System.Process.Concurrent
 import Text.Printf
 import Text.Regex.TDFA
 
@@ -128,7 +129,7 @@ main' Options{..} = withConcurrentOutput $ do
             -- Spawn a thread to run the commands, then wait on either that run to
             -- finish *or* the same original TMVar to be signaled (so, a particular
             -- pipeline of commands can only "interrupt" itself - all other concurrently
-            -- scheduled commands are simple enqueued.
+            -- scheduled commands are simply enqueued.
             let loop = do
                     a <- async (runCommands cmds)
 
@@ -169,7 +170,7 @@ maybeEnqueueCommands cmds_queue_tvar path CommandPlan{..} = do
     case match cmdRegex path of
         [] -> pure ()
         (captures:_) -> do
-            commands <- runSos (mapM (\t -> instantiateTemplate t captures) cmdTemplates)
+            commands <- runSos (mapM (instantiateTemplate captures) cmdTemplates)
             atomically $
                 let loop :: CommandsQueue -> STM ()
                     loop cmds_queue =
@@ -194,15 +195,23 @@ runCommands cmds0 = go 1 cmds0
     go n (cmd:cmds) = do
         outputConcurrentLn (colored Magenta (printf "\n[%d/%d] " n (length cmds0)) <> cmd)
 
-        mexception <- (callCommand cmd >> pure Nothing) `catch` (\e -> pure (Just e))
-        case mexception of
-            Nothing -> do
-                outputConcurrentLn (colored Green "Success ✓")
-                go (n+1) cmds
-            Just e ->
+        success <-
+            (do
+                (_, _, _, ph) <- createProcess (shell cmd)
+                waitForProcess ph >>= \case
+                    ExitSuccess -> do
+                        outputConcurrentLn (colored Green "Success ✓")
+                        pure True
+                    _ -> do
+                        outputConcurrentLn (colored Red "Failure ✗")
+                        pure False)
+            `catch` (\e -> do
                 case fromException e of
                     Just ThreadKilled -> pure ()
                     _ -> outputConcurrentLn (colored Red "Failure ✗")
+                pure False)
+
+        when success (go (n+1) cmds)
 
 --------------------------------------------------------------------------------
 

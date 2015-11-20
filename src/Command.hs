@@ -63,17 +63,17 @@ parseCommandTemplate template =
 --
 -- For example,
 --
---    instantiateTemplate [Right "foo", Left 0, Right "bar", Left 1] ["ONE", "TWO"] == "fooONEbarTWO"
+--    instantiateTemplate ["ONE", "TWO"] [Right "foo", Left 0, Right "bar", Left 1] == "fooONEbarTWO"
 --
-instantiateTemplate :: forall m. MonadError SosException m => CommandTemplate -> [ByteString] -> m Command
-instantiateTemplate template0 vars0 = go 0 template0 vars0
+instantiateTemplate :: forall m. MonadError SosException m => [ByteString] -> CommandTemplate -> m Command
+instantiateTemplate vars0 template0 = go 0 vars0 template0
   where
-    go :: Int -> CommandTemplate -> [ByteString] -> m Command
-    go _ template [] =
+    go :: Int -> [ByteString] -> CommandTemplate -> m Command
+    go _ [] template =
         case flattenTemplate template of
             Left err -> throwError (SosCommandApplyException template0 vars0 err)
             Right x  -> pure x
-    go n template (t:ts) = go (n+1) (map f template) ts
+    go n (t:ts) template = go (n+1) ts (map f template)
       where
         f :: Either Int ByteString -> Either Int ByteString
         f (Left n')
