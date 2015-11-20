@@ -109,26 +109,30 @@ main' Options{..} = do
 
     withManager $ \wm -> do
         _ <- watchTree wm target predicate $ \event -> do
-            putStrLn ("\n" <> colored Cyan (showEvent event cwd))
+            -- putStrLn ("\n" <> colored Cyan (showEvent event cwd))
             let path = BS.pack (eventRelPath event)
-            mapM_ (maybeEnqueueCommands cmds_queue_tvar path) plans
+
+            commands <- concat <$> mapM (maybeInstantiateTemplate path) plans
+            when (commands /= [])
+                (atomically (enqueueCommands cmds_queue_tvar (showEvent event cwd) commands))
 
         forever $ do
-            (cmds, tmvar) <- atomically $ do
+            (event, cmds, tmvar) <- atomically $ do
                 cmds_queue <- readTVar cmds_queue_tvar
                 case viewl cmds_queue of
                     EmptyL -> retry
-                    ((cmds0, tmvar0) :< _) -> do
+                    ((event0, cmds0, tmvar0) :< _) -> do
                         -- Clear the TMVar which might have been set before we've even
                         -- started running the commands.
                         _ <- tryTakeTMVar tmvar0
-                        pure (cmds0, tmvar0)
+                        pure (event0, cmds0, tmvar0)
 
             -- Spawn a thread to run the commands, then wait on either that run to
             -- finish *or* the same original TMVar to be signaled (so, a particular
             -- pipeline of commands can only "interrupt" itself - all other concurrently
             -- scheduled commands are simply enqueued.
             let loop = do
+                    putStrLn ("\n" <> colored Cyan event)
                     a <- async (runCommands cmds)
 
                     result <- atomically $
@@ -167,33 +171,32 @@ main' Options{..} = do
 
         pure ()
 
-type EnqueuedCommands = ([Command], TMVar ())
+maybeInstantiateTemplate :: ByteString -> CommandPlan -> IO [Command]
+maybeInstantiateTemplate path CommandPlan{..} =
+    case match cmdRegex path of
+        [] -> pure []
+        (captures:_) -> runSos (mapM (instantiateTemplate captures) cmdTemplates)
+
+type EnqueuedCommands = (String, [Command], TMVar ())
 type CommandsQueue = Seq EnqueuedCommands
 
--- | If a plan's regex matches the file path, walk the commands queue - if we
--- see we've already been enqueued, signal the TMVar. Otherwise, enqueue us at
--- the end.
-maybeEnqueueCommands :: TVar CommandsQueue -> ByteString -> CommandPlan -> IO ()
-maybeEnqueueCommands cmds_queue_tvar path CommandPlan{..} = do
-    case match cmdRegex path of
-        [] -> pure ()
-        (captures:_) -> do
-            commands <- runSos (mapM (instantiateTemplate captures) cmdTemplates)
+-- | Walk the commands queue - if we see we've already been enqueued, signal the
+-- corresponding TMVar. Otherwise, enqueue us at the end.
+enqueueCommands :: TVar CommandsQueue -> String -> [Command] -> STM ()
+enqueueCommands cmds_queue_tvar event commands =
+    let loop :: CommandsQueue -> STM ()
+        loop cmds_queue =
+            case viewl cmds_queue of
+                EmptyL -> do
+                    tmvar <- newEmptyTMVar
+                    modifyTVar' cmds_queue_tvar (\s -> s |> (event, commands, tmvar))
 
-            atomically $
-                let loop :: CommandsQueue -> STM ()
-                    loop cmds_queue =
-                        case viewl cmds_queue of
-                            EmptyL -> do
-                                tmvar <- newEmptyTMVar
-                                modifyTVar' cmds_queue_tvar (\s -> s |> (commands, tmvar))
+                (_, commands', tmvar) :< cmds_queue_tail -> do
+                    if commands == commands'
+                        then void (tryPutTMVar tmvar ())
+                        else loop cmds_queue_tail
 
-                            (commands', tmvar) :< cmds_queue_tail -> do
-                                if commands == commands'
-                                    then void (tryPutTMVar tmvar ())
-                                    else loop cmds_queue_tail
-
-                in readTVar cmds_queue_tvar >>= loop
+    in readTVar cmds_queue_tvar >>= loop
 
 -- Run a list of shell commands sequentially. If a command returns ExitFailure,
 -- don't run the rest.
