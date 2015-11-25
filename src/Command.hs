@@ -139,14 +139,14 @@ buildCommandPlan pattern templates0 = do
 -- A "raw" CommandPlan that is post-processed after being parsed from a yaml
 -- file. Namely, the regex is compiled and the commands are parsed into
 -- templates.
-data RawCommandPlan = RawCommandPlan Text [Text]
+data RawCommandPlan = RawCommandPlan [Text] [Text]
 
 instance FromJSON RawCommandPlan where
     parseJSON (Object o) = RawCommandPlan
-        <$> o .: "pattern"
+        <$> o .: "patterns"
         <*> o .: "commands"
     parseJSON v = typeMismatch "command" v
 
-buildRawCommandPlan :: forall m. MonadError SosException m => RawCommandPlan -> m CommandPlan
-buildRawCommandPlan (RawCommandPlan pattern templates) =
-    buildCommandPlan (T.encodeUtf8 pattern) (map T.encodeUtf8 templates)
+buildRawCommandPlan :: forall m. MonadError SosException m => RawCommandPlan -> m [CommandPlan]
+buildRawCommandPlan (RawCommandPlan patterns templates) =
+    mapM (\pattern -> buildCommandPlan (T.encodeUtf8 pattern) (map T.encodeUtf8 templates)) patterns

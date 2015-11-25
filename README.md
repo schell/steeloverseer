@@ -37,7 +37,8 @@ As a shortcut, we may want to write the above only once and save it in `.sosrc`,
 an alternative to the command-line interface (yaml syntax):
 
 ```yaml
-- pattern: src/(.*)\.c
+- patterns:
+  - src/(.*)\.c
   commands:
   - gcc -c {0} -o obj/{1}.o
   - make test --filter=test/{1}_test.c
@@ -50,7 +51,8 @@ are enqueued and run sequentially to keep the terminal output clean and readable
 For example, we may wish to run `hlint` on any modified `.hs` file:
 
 ```yaml
-- pattern: .*\.hs
+- patterns:
+  - .*\.hs
   commands:
   - hlint {0}
 ```

@@ -1,7 +1,8 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
@@ -231,10 +232,10 @@ parseSosrc = do
                 Left err -> do
                     putStrLn ("Error parsing .sosrc:\n" ++ prettyPrintParseException err)
                     exitFailure
-                Right raw_plans -> do
+                Right (raw_plans :: [RawCommandPlan]) -> do
                     plans <- runSos (mapM buildRawCommandPlan raw_plans)
-                    putStrLn ("Found " ++ show (length plans) ++ " commands in .sosrc")
-                    pure plans
+                    putStrLn "Found .sosrc"
+                    pure (concat plans)
         else pure []
 
 --------------------------------------------------------------------------------
