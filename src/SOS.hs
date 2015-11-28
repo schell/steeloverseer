@@ -32,7 +32,7 @@ instance Show SosException where
         reconstruct :: [Either Int ByteString] -> String
         reconstruct = concatMap
             (\case
-                Left n   -> "{" ++ show n ++ "}"
+                Left n   -> '\\' : show n
                 Right bs -> BS.unpack bs)
 
 type Sos a = ExceptT SosException IO a

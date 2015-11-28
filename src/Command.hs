@@ -35,11 +35,11 @@ type Command = String
 -- A CommandTemplate is a string that may contain anti-quoted capture groups.
 -- For example,
 --
---    "gcc -c {0}.c -o {0}.c"
+--    "gcc -c \1.c -o \1.c"
 --
 -- will become
 --
---    [Right "gcc -c ", Left 0, Right ".c -o ", Left 0, Right ".c"]
+--    [Right "gcc -c ", Left 1, Right ".c -o ", Left 1, Right ".c"]
 type CommandTemplate
     = [Either Int ByteString]
 
@@ -54,10 +54,10 @@ parseCommandTemplate template =
           <|> Left  <$> capturePart)
       where
         textPart :: Parsec ByteString ByteString
-        textPart = BS.pack <$> some (satisfy (/= '{'))
+        textPart = BS.pack <$> some (satisfy (/= '\\'))
 
         capturePart :: Parsec ByteString Int
-        capturePart = between (char '{') (char '}') (read <$> some digitChar)
+        capturePart = read <$> (char '\\' *> some digitChar)
 
 -- Instantiate a template with a list of captured variables, per their indices.
 --
@@ -88,7 +88,7 @@ flattenTemplate = go mempty
     go :: BS.Builder -> CommandTemplate -> Either String Command
     go acc [] = Right (BSL.unpack (BS.toLazyByteString acc))
     go acc (Right x : xs) = go (acc <> BS.byteString x) xs
-    go _   (Left n : _) = Left ("uninstantiated template variable {" <> show n <> "}")
+    go _   (Left n : _) = Left ("uninstantiated template variable \\" <> show n)
 
 -- A CommandPlan is a regex paired with a list of templates to execute on files
 -- that match the regex. Any mismatching of captured variables with the
@@ -139,14 +139,26 @@ buildCommandPlan pattern templates0 = do
 -- A "raw" CommandPlan that is post-processed after being parsed from a yaml
 -- file. Namely, the regex is compiled and the commands are parsed into
 -- templates.
-data RawCommandPlan = RawCommandPlan [Text] [Text]
+data RawCommandPlan = RawCommandPlan SloppyStrings [Text]
 
 instance FromJSON RawCommandPlan where
     parseJSON (Object o) = RawCommandPlan
-        <$> o .: "patterns"
-        <*> o .: "commands"
+        <$> (o .: "pattern" <|> o .: "patterns")
+        <*> (o .: "command" <|> o .: "commands")
     parseJSON v = typeMismatch "command" v
+
+-- Allow both strings and lists of strings in .sosrc
+newtype SloppyStrings = SloppyStrings (Either Text [Text])
+
+instance FromJSON SloppyStrings where
+    parseJSON v@(String _) = SloppyStrings . Left  <$> parseJSON v
+    parseJSON v@(Array _)  = SloppyStrings . Right <$> parseJSON v
+    parseJSON v = typeMismatch "string or list of strings" v
 
 buildRawCommandPlan :: forall m. MonadError SosException m => RawCommandPlan -> m [CommandPlan]
 buildRawCommandPlan (RawCommandPlan patterns templates) =
-    mapM (\pattern -> buildCommandPlan (T.encodeUtf8 pattern) (map T.encodeUtf8 templates)) patterns
+    mapM (\pattern -> buildCommandPlan (T.encodeUtf8 pattern) (map T.encodeUtf8 templates)) (listify patterns)
+  where
+    listify :: SloppyStrings -> [Text]
+    listify (SloppyStrings (Left x))   = [x]
+    listify (SloppyStrings (Right xs)) = xs
