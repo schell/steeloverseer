@@ -20,8 +20,20 @@ This will create a binary deep inside `~/.stack/`, and symlink to it at
 Usage
 =====
 
-`sos` requires a directory to watch, a list of commands to run, and an optional
-list of regex patterns to match on file paths (see `sos --help` for details).
+See `sos --help` to get started:
+
+    Steel Overseer 2.0
+
+    Usage: sos [TARGET] [-c|--command COMMAND] [-p|--pattern PATTERN]
+      A file watcher and development tool.
+
+    Available options:
+      -h,--help                Show this help text
+      TARGET                   File or directory to watch for
+                               changes. (default: ".")
+      -c,--command COMMAND     Add command to run on file event.
+      -p,--pattern PATTERN     Add pattern to match on file path. Only relevant if
+                               the target is a directory. (default: .*)
 
 Capture groups can be created with `(` `)` and captured variables can be
 referred to with `\1`, `\2`, etc. (`\0` contains the entire match).
@@ -42,6 +54,12 @@ an alternative to the command-line interface (yaml syntax):
   - gcc -c \0 -o obj/\1.o
   - make test --filter=test/\1_test.c
 ```
+
+Then, we only need to run
+
+    sos
+
+to start watching the current directory.
 
 Pipelines of commands are immediately canceled and re-run if a subsequent
 filesystem event triggers the *same* list of commands. Otherwise, commands are

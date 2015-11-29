@@ -52,11 +52,13 @@ main = execParser opts >>= main'
     optsParser = Options
         <$> strArgument
             ( help "File or directory to watch for changes."
-           <> metavar "TARGET" )
+           <> metavar "TARGET"
+           <> value "."
+           <> showDefault )
         <*> many (fmap BS.pack (strOption
             ( long "command"
            <> short 'c'
-           <> help "Add command to run on file event. (default: inferred)"
+           <> help "Add command to run on file event."
            <> metavar "COMMAND" )))
         <*> many (fmap BS.pack (strOption
             ( long "pattern"
