@@ -139,7 +139,7 @@ buildCommandPlan pattern templates0 = do
 -- A "raw" CommandPlan that is post-processed after being parsed from a yaml
 -- file. Namely, the regex is compiled and the commands are parsed into
 -- templates.
-data RawCommandPlan = RawCommandPlan SloppyStrings [Text]
+data RawCommandPlan = RawCommandPlan SloppyStrings SloppyStrings
 
 instance FromJSON RawCommandPlan where
     parseJSON (Object o) = RawCommandPlan
@@ -157,7 +157,7 @@ instance FromJSON SloppyStrings where
 
 buildRawCommandPlan :: forall m. MonadError SosException m => RawCommandPlan -> m [CommandPlan]
 buildRawCommandPlan (RawCommandPlan patterns templates) =
-    mapM (\pattern -> buildCommandPlan (T.encodeUtf8 pattern) (map T.encodeUtf8 templates)) (listify patterns)
+    mapM (\pattern -> buildCommandPlan (T.encodeUtf8 pattern) (map T.encodeUtf8 (listify templates))) (listify patterns)
   where
     listify :: SloppyStrings -> [Text]
     listify (SloppyStrings (Left x))   = [x]
