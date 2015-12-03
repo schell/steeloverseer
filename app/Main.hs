@@ -103,17 +103,17 @@ main' Options{..} = do
 
     -- Queue of commands to run. The next list of commands to run is at the head
     -- of the list.
-    cmds_queue_tvar <- newTVarIO (Seq.empty)
+    cmds_queue_tvar <- newTVarIO Seq.empty
 
     cwd <- getCurrentDirectory
 
     putStrLn "Hit Ctrl+C to quit."
 
     let eventRelPath :: Event -> FilePath
-        eventRelPath = \event -> makeRelative cwd (eventPath event)
+        eventRelPath event = makeRelative cwd (eventPath event)
 
         predicate :: Event -> Bool
-        predicate = \event -> or (map (\plan -> match (cmdRegex plan) (eventRelPath event)) plans)
+        predicate event = any (\plan -> match (cmdRegex plan) (eventRelPath event)) plans
 
     withManager $ \wm -> do
         _ <- watchTree wm target predicate $ \event -> do
@@ -144,24 +144,24 @@ main' Options{..} = do
                     a <- async (runCommands (NE.toList cmds))
 
                     result <- atomically $
-                        (do
-                            pollSTM a >>= \case
-                                Nothing -> retry
-                                Just r -> do
-                                    -- Partial pattern matching is safe here because we're the
-                                    -- only thread that removes from the command queue, and we
-                                    -- just read a non-empty sequence from it above.
-                                    modifyTVar' cmds_queue_tvar
-                                        (\s -> case viewl s of
-                                                   (_ :< rest) -> rest)
-                                    pure (Left r))
-                        <|> Right <$> takeTMVar tmvar
+                        (pollSTM a >>= \case
+                            Nothing -> retry
+                            Just r -> do
+                                -- Partial pattern matching is safe here because we're the
+                                -- only thread that removes from the command queue, and we
+                                -- just read a non-empty sequence from it above.
+                                modifyTVar' cmds_queue_tvar
+                                    (\s -> case viewl s of
+                                               (_ :< rest) -> rest)
+                                pure (Left r))
+                        <|>
+                        Right <$> takeTMVar tmvar
 
                     case result of
                         -- Commands threw an exception - a ThreadKilled we are
                         -- okay with, but anything else we should print to the
                         -- console.
-                        Left (Left ex) -> do
+                        Left (Left ex) ->
                             case fromException ex of
                                 Just ThreadKilled -> pure ()
                                 _ -> putStrLn (colored Red ("Exception: " ++ show ex))
@@ -234,7 +234,7 @@ enqueueCommands cmds_queue_tvar event commands =
                     tmvar <- newEmptyTMVar
                     modifyTVar' cmds_queue_tvar (\s -> s |> (event, commands, tmvar))
 
-                (_, commands', tmvar) :< cmds_queue_tail -> do
+                (_, commands', tmvar) :< cmds_queue_tail ->
                     if commands == commands'
                         then void (tryPutTMVar tmvar ())
                         else loop cmds_queue_tail

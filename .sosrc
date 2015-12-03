@@ -1,0 +1,4 @@
+- pattern: .*\.hs$
+  commands:
+  - stack build
+  - hlint \0
