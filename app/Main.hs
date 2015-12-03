@@ -190,7 +190,7 @@ main' Options{..} = do
                                                 mapM_ (\(c:|cs) -> do
                                                           putStrLn ("- " ++ c)
                                                           mapM_ (putStrLn . ("  " ++)) cs)
-                                                      (cmds_queue^..traverse._2)
+                                                      (cmds_queue^..traversed._2)
                                                 prompt
                                             _ -> prompt)
                                     hSetBuffering stdin LineBuffering
