@@ -44,10 +44,12 @@ executable sos
                      , directory
                      , fsnotify
                      , filepath
+                     , microlens
                      , mtl
                      , optparse-applicative
                      , process
                      , regex-tdfa
+                     , semigroups
                      , steeloverseer
                      , stm
                      , time

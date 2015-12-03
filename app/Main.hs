@@ -14,9 +14,12 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Data.ByteString           (ByteString)
+import Data.Function
+import Data.List.NonEmpty        (NonEmpty(..))
 import Data.Monoid
 import Data.Sequence             (Seq, ViewL(..), (|>), viewl)
 import Data.Yaml                 (decodeFileEither, prettyPrintParseException)
+import Lens.Micro
 import Prelude                   hiding (FilePath)
 import Options.Applicative
 import System.Console.ANSI
@@ -24,11 +27,13 @@ import System.Directory
 import System.Exit
 import System.FilePath
 import System.FSNotify
+import System.IO
 import System.Process
 import Text.Printf
 import Text.Regex.TDFA
 
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.List.NonEmpty    as NE
 import qualified Data.Sequence         as Seq
 
 version :: String
@@ -117,9 +122,9 @@ main' Options{..} = do
 
             commands <- concat <$> mapM (maybeInstantiateTemplate path) plans
             when (commands /= [])
-                (atomically (enqueueCommands cmds_queue_tvar (showEvent event cwd) commands))
+                (atomically (enqueueCommands cmds_queue_tvar (showEvent event cwd) (NE.fromList commands)))
 
-        forever $ do
+        _ <- forever $ do
             (event, cmds, tmvar) <- atomically $ do
                 cmds_queue <- readTVar cmds_queue_tvar
                 case viewl cmds_queue of
@@ -136,7 +141,7 @@ main' Options{..} = do
             -- scheduled commands are simply enqueued.
             let loop = do
                     putStrLn ("\n" <> colored Cyan event)
-                    a <- async (runCommands cmds)
+                    a <- async (runCommands (NE.toList cmds))
 
                     result <- atomically $
                         (do
@@ -161,8 +166,43 @@ main' Options{..} = do
                                 Just ThreadKilled -> pure ()
                                 _ -> putStrLn (colored Red ("Exception: " ++ show ex))
 
-                        -- Commands finished - go back to outer loop.
-                        Left (Right ()) -> pure ()
+                        -- Commands finished successfully - go back to outer loop.
+                        Left (Right True) -> pure ()
+
+                        -- A command failed - if there is another enqueued list
+                        -- of commands to run, prompt the user to continue or
+                        -- abort.
+                        Left (Right False) -> do
+                            cmds_queue <- atomically (readTVar cmds_queue_tvar)
+                            case length cmds_queue of
+                                0 -> pure ()
+                                n -> do
+                                    putStrLn (colored Yellow (show n ++ " job(s) still pending."))
+
+                                    hSetBuffering stdin NoBuffering
+                                    continue <- fix (\prompt -> do
+                                        putStr (colored Yellow "Press 'c' to continue, 'p' to print, or 'a' to abort: ")
+                                        hFlush stdout
+                                        (getChar <* putStrLn "") >>= \case
+                                            'c' -> pure True
+                                            'a' -> pure False
+                                            'p' -> do
+                                                mapM_ (\(c:|cs) -> do
+                                                          putStrLn ("- " ++ c)
+                                                          mapM_ (putStrLn . ("  " ++)) cs)
+                                                      (cmds_queue^..traverse._2)
+                                                prompt
+                                            _ -> prompt)
+                                    hSetBuffering stdin LineBuffering
+
+                                    -- Here, it's possible we've reported that
+                                    -- `n` jobs were enqueued, but by the time
+                                    -- the user decides to abort them, more
+                                    -- were added. Oh well, delete them all.
+                                    unless continue $ do
+                                        n' <- atomically (length <$>swapTVar cmds_queue_tvar mempty)
+                                        putStrLn (colored Red ("Aborted " ++ show n' ++ " job(s)."))
+
 
                         -- Another filesystem event triggered this list of commands
                         -- to be run again - cancel the previous run and start over.
@@ -180,12 +220,12 @@ maybeInstantiateTemplate path CommandPlan{..} =
         [] -> pure []
         (captures:_) -> runSos (mapM (instantiateTemplate captures) cmdTemplates)
 
-type EnqueuedCommands = (String, [Command], TMVar ())
+type EnqueuedCommands = (String, NonEmpty Command, TMVar ())
 type CommandsQueue = Seq EnqueuedCommands
 
 -- | Walk the commands queue - if we see we've already been enqueued, signal the
 -- corresponding TMVar. Otherwise, enqueue us at the end.
-enqueueCommands :: TVar CommandsQueue -> String -> [Command] -> STM ()
+enqueueCommands :: TVar CommandsQueue -> String -> NonEmpty Command -> STM ()
 enqueueCommands cmds_queue_tvar event commands =
     let loop :: CommandsQueue -> STM ()
         loop cmds_queue =
@@ -202,12 +242,13 @@ enqueueCommands cmds_queue_tvar event commands =
     in readTVar cmds_queue_tvar >>= loop
 
 -- Run a list of shell commands sequentially. If a command returns ExitFailure,
--- don't run the rest.
-runCommands :: [Command] -> IO ()
+-- don't run the rest. Return whether or not all commands completed
+-- successfully.
+runCommands :: [Command] -> IO Bool
 runCommands cmds0 = go 1 cmds0
   where
-    go :: Int -> [Command] -> IO ()
-    go _ [] = pure ()
+    go :: Int -> [Command] -> IO Bool
+    go _ [] = pure True
     go n (cmd:cmds) = do
         putStrLn (colored Magenta (printf "[%d/%d] " n (length cmds0)) <> cmd)
 
@@ -219,8 +260,9 @@ runCommands cmds0 = go 1 cmds0
             ExitSuccess -> do
                 putStrLn (colored Green "Success ✓")
                 go (n+1) cmds
-            _ ->
+            _ -> do
                 putStrLn (colored Red "Failure ✗")
+                pure False
 
 --------------------------------------------------------------------------------
 
