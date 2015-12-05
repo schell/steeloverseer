@@ -2,3 +2,7 @@
   commands:
   - stack build
   - hlint \0
+- patterns:
+  - ^steeloverseer\.cabal$
+  - ^stack\.yaml$
+  command: stack build

@@ -21,14 +21,24 @@ source-repository head
 library
   ghc-options:         -Wall
   hs-source-dirs:      src
-  exposed-modules:     Command
+  exposed-modules:     ANSI
+                     , Job
+                     , Rule
                      , Sos
+                     , Template
   build-depends:       base
                      , aeson
+                     , ansi-terminal
+                     , async
                      , bytestring
+                     , containers
                      , megaparsec
+                     , microlens
                      , mtl
+                     , process
+                     , semigroups
                      , regex-tdfa
+                     , stm
                      , text
                      , yaml
 
@@ -37,22 +47,12 @@ executable sos
   hs-source-dirs:      app
   main-is:             Main.hs
   build-depends:       base
-                     , ansi-terminal
-                     , async
                      , bytestring
-                     , containers
                      , directory
                      , fsnotify
                      , filepath
-                     , microlens
-                     , mtl
                      , optparse-applicative
-                     , process
                      , regex-tdfa
                      , semigroups
                      , steeloverseer
-                     , stm
-                     , time
-                     , text
-                     , unix
                      , yaml
