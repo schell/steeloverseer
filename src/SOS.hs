@@ -6,6 +6,7 @@ import  System.Exit
 import  System.FilePath
 import  System.Console.ANSI
 import  Control.Monad
+import  Control.Applicative
 import  Control.Concurrent
 import  Data.Maybe
 import  Text.Regex.TDFA
