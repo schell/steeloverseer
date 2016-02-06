@@ -1,66 +1,93 @@
 Steel Overseer
 ==============
-> ![flavor text](https://raw.github.com/schell/steeloverseer/master/rsrc/pic.jpg)
->
-> The world is already run by all manner of machines. One day, they'll remind us of that fact. 
-> 
-> -Sargis Haz, artificer 
 
-[![Build Status](https://travis-ci.org/schell/steeloverseer.png?branch=master)](https://travis-ci.org/schell/steeloverseer)
+A file watcher and development tool, similar to Ruby's [Guard](https://github.com/guard/guard).
 
-It is
------
-A development tool that runs commands when certain files are updated, added or
-deleted.
-
-Steeloverseer watches files whose names match a regular expression and then 
-runs a series of commands when those files are updated. 
-
-Specifically
-------------
-A filesystem event occurs when a file is added, deleted or updated. 
-If this event happens on a file that matches one of the patterns provided with 
-the `-p PATTERN` flag then steeloverseer will run the commands provided 
-with the `-c COMMAND` flag. These commands will be performed in serial until 
-one hangs, fails or all exit successfully.
-
-You can provide multiple patterns and multiple commands, ie:
-
-    sos -c "git status" -c "echo hi world" -p "hs" -p "md"
-
-You can seperately specify the directory to run in with `-d DIRECTORY`. The 
-default is `.`.
-    
-This will execute `git status` followed by `echo hi world` 
-whenever files matching "hs" or "md" are changed. `-d DIRECTORY` 
-is not provided above, so it's assumed to be `./`.
-
-Also, since `-p PATTERN` are regular expressions we can do the same as above with:
-
-    sos -c "git status" -c "echo hi world" -p "hs|md"
-    
-Of course this would run whenever any match on "hs|md" is found, 
-for instance on the filepath `/Users/home/mdman/file.txt`.
-For extensions it may make sense to use the endline matcher:
-
-    sos -c "git status" -c "echo hi world" -p "hs$|md$"
+Forked and extended from **https://github.com/schell/steeloverseer**
 
 Installation
-------------
-Using cabal, `cabal install steeloverseer`.
+============
+
+Download and install the [stack](https://github.com/commercialhaskell/stack) build tool.
+
+    git clone https://github.com/mitchellwrosen/steeloverseer.git
+    cd steeloverseer
+    stack install
+
+This will create a binary deep inside `~/.stack/`, and symlink to it at
+`~/.local/bin/sos`.
 
 Usage
------
-    sos: Usage: sos [v] -c command -p pattern
-      -v            --version              show version info
-      -c COMMAND    --command=COMMAND      add command to run on file event
-      -p PATTERN    --pattern=PATTERN      add pattern to match on file path
-      -d DIRECTORY  --directory=DIRECTORY  set directory to watch for changes (default is ./)
+=====
 
-![steeloverseer screencast](http://zyghost.com/images/sos.gif)
+See `sos --help` to get started:
 
-Future
-------
-Project `.sosrc` file for specifying multiple sos commands while working on a project (@see issue #4)
+    Steel Overseer 2.0
 
-[Art above by Chris Rahn for Wizards of the Coast](http://gatherer.wizards.com/Pages/Card/Details.aspx?multiverseid=205036 "Steel Overseer")
+    Usage: sos [TARGET] [-c|--command COMMAND] [-p|--pattern PATTERN]
+      A file watcher and development tool.
+
+    Available options:
+      -h,--help                Show this help text
+      TARGET                   File or directory to watch for
+                               changes. (default: ".")
+      -c,--command COMMAND     Add command to run on file event.
+      -p,--pattern PATTERN     Add pattern to match on file path. Only relevant if
+                               the target is a directory. (default: .*)
+
+Capture groups can be created with `(` `)` and captured variables can be
+referred to with `\1`, `\2`, etc. (`\0` contains the entire match).
+
+For example, for each change to a `.c` file in `src/`, we may want to compile
+the file and run its corresponding unit test:
+
+    sos src/ -c "gcc -c \0 -o obj/\1.o" -c "make test --filter=test/\1_test.c" -p "src/(.*)\.c"
+
+Commands are run left-to-right, and one failed command will halt the entire pipeline.
+
+As a shortcut, we may want to write the above only once and save it in `.sosrc`, which is
+an alternative to the command-line interface (yaml syntax):
+
+```yaml
+- pattern: src/(.*)\.c
+  commands:
+  - gcc -c \0 -o obj/\1.o
+  - make test --filter=test/\1_test.c
+```
+
+Then, we only need to run
+
+    sos
+
+to start watching the current directory.
+
+Pipelines of commands are immediately canceled and re-run if a subsequent
+filesystem event triggers the *same* list of commands. Otherwise, commands are
+are enqueued and run sequentially to keep the terminal output clean and readable.
+
+For example, we may wish to run `hlint` on any modified `.hs` file:
+
+```yaml
+- pattern: .*\.hs
+  command: hlint \0
+```
+
+We can modify `foo.hs` and trigger `hlint foo.hs` to run. During its execution,
+modifying `bar.hs` will *enqueue* `hlint bar.hs`, while modifying `foo.hs` again
+will *re-run* `hlint foo.hs`.
+
+.sosrc grammar
+==============
+
+    sosrc            := [entry]
+    entry            := { "pattern" | "patterns" : value | [value]
+                        , "command" | "commands" : value | [value]
+                        }
+    value            := [segment]
+    segment          := text_segment | var_segment
+    text_segment     := string
+    var_segment      := '\' integer
+
+The .sosrc grammar is somewhat flexible with respect to the command
+specifications. Both singular and plural keys are allowed, and both strings
+and lists of strings are allowed for values.
