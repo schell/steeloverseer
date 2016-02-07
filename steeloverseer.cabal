@@ -32,20 +32,20 @@ library
         Template
     build-depends:
         base -any,
-        aeson >=0.10.0.0,
-        ansi-terminal >=0.6.2.3,
-        async >=2.1.0,
-        bytestring >=0.10.6.0,
-        containers >=0.5.6.2,
-        megaparsec >=4.3.0,
-        microlens >=0.4.1.0,
-        mtl >=2.2.1,
-        process >=1.2.3.0,
-        semigroups >=0.18.1,
-        regex-tdfa >=1.2.1,
-        stm >=2.4.4.1,
-        text >=1.2.2.0,
-        yaml >=0.8.15.3
+        aeson -any,
+        ansi-terminal -any,
+        async -any,
+        bytestring -any,
+        containers -any,
+        megaparsec -any,
+        microlens -any,
+        mtl -any,
+        process -any,
+        semigroups -any,
+        regex-tdfa -any,
+        stm -any,
+        text -any,
+        yaml -any
     hs-source-dirs: src
     ghc-options: -Wall
 
@@ -53,15 +53,15 @@ executable sos
     main-is: Main.hs
     build-depends:
         base -any,
-        bytestring >=0.10.6.0,
-        directory >=1.2.2.0,
-        fsnotify >=0.2.1,
-        filepath >=1.4.0.0,
-        optparse-applicative >=0.12.1.0,
-        regex-tdfa >=1.2.1,
-        semigroups >=0.18.1,
+        bytestring -any,
+        directory -any,
+        fsnotify -any,
+        filepath -any,
+        optparse-applicative -any,
+        regex-tdfa -any,
+        semigroups -any,
         steeloverseer -any,
-        yaml >=0.8.15.3
+        yaml -any
     hs-source-dirs: app
     ghc-options: -Wall -threaded
 

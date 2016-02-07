@@ -23,7 +23,7 @@ import Data.Function                (fix)
 import Data.List.NonEmpty           (NonEmpty(..))
 import Data.Monoid
 import Data.Sequence                (Seq, ViewL(..), (|>), viewl)
-import Lens.Micro
+import Lens.Micro            hiding (to)
 import System.Console.ANSI
 import System.Exit
 import System.IO
