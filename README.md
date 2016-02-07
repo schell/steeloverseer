@@ -3,7 +3,7 @@ Steel Overseer
 
 A file watcher and development tool, similar to Ruby's [Guard](https://github.com/guard/guard).
 
-Forked and extended from **https://github.com/schell/steeloverseer**
+[![Build Status](https://travis-ci.org/steeloverseer/steeloverseer.png?branch=master)](https://travis-ci.org/steeloverseer/steeloverseer)
 
 Installation
 ============
