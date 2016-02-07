@@ -3,16 +3,12 @@ Steel Overseer
 
 A file watcher and development tool, similar to Ruby's [Guard](https://github.com/guard/guard).
 
-Forked and extended from **https://github.com/schell/steeloverseer**
-
 Installation
 ============
 
 Download and install the [stack](https://github.com/commercialhaskell/stack) build tool.
 
-    git clone https://github.com/mitchellwrosen/steeloverseer.git
-    cd steeloverseer
-    stack install
+    stack install steeloverseer
 
 This will create a binary deep inside `~/.stack/`, and symlink to it at
 `~/.local/bin/sos`.
