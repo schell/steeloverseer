@@ -1,3 +1,0 @@
-resolver: lts-5.2
-extra-deps:
-- megaparsec-4.2.0
