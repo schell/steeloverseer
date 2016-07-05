@@ -4,10 +4,10 @@ cabal-version: >=1.8
 build-type: Simple
 license: BSD3
 license-file: LICENSE
-maintainer: schell.scivally@synapsegrop.com, mitchellwrosen@gmail.com
+maintainer: schell.scivally@synapsegrop.com
 stability: stable
-homepage: https://github.com/steeloverseer/steeloverseer
-bug-reports: https://github.com/steeloverseer/steeloverseer/issues
+homepage: https://github.com/schell/steeloverseer
+bug-reports: https://github.com/schell/steeloverseer/issues
 synopsis: A file watcher and development tool.
 description:
     A command line tool that responds to filesystem events.
@@ -15,13 +15,13 @@ description:
     files are added or updated. Watches files using regular
     expressions.
 category: Development
-author: Schell Scivally
+author: Schell Scivally, Mitchell Rosen
 extra-source-files:
     README.md
 
 source-repository head
     type: git
-    location: git://github.com/steeloverseer/steeloverseer.git
+    location: git://github.com/schell/steeloverseer.git
 
 library
     exposed-modules:
@@ -31,7 +31,7 @@ library
         Sos
         Template
     build-depends:
-        base -any,
+        base >= 4.0 && < 6.0,
         aeson -any,
         ansi-terminal -any,
         async -any,
@@ -52,7 +52,7 @@ library
 executable sos
     main-is: Main.hs
     build-depends:
-        base -any,
+        base >= 4.0 && < 6.0,
         bytestring -any,
         directory -any,
         fsnotify -any,
