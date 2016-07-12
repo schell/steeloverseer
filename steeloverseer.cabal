@@ -1,5 +1,11 @@
 name: steeloverseer
-version: 2.0
+-- The package version.  See the Haskell package versioning policy (PVP)
+-- for standards guiding when and how versions should be incremented.
+-- http://www.haskell.org/haskellwiki/Package_versioning_policy
+--       +-+------- breaking API changes
+--       | | +----- non-breaking API additions
+--       | | | +--- code changes with no API change
+version: 2.0.0.1
 cabal-version: >=1.8
 build-type: Simple
 license: BSD3
@@ -31,37 +37,37 @@ library
         Sos
         Template
     build-depends:
-        base >= 4.0 && < 6.0,
-        aeson -any,
-        ansi-terminal -any,
-        async -any,
-        bytestring -any,
-        containers -any,
-        megaparsec -any,
-        microlens -any,
-        mtl -any,
-        process -any,
-        semigroups -any,
-        regex-tdfa -any,
-        stm -any,
-        text -any,
-        yaml -any
+        base >= 4.0 && < 6.0
+      , aeson >= 0.8
+      , ansi-terminal >= 0.6.2
+      , async >= 2.0
+      , bytestring >= 0.10
+      , containers >= 0.5
+      , megaparsec >= 4.2 && < 5.0
+      , microlens >= 0.2
+      , mtl >= 2.2
+      , process >= 1.2
+      , semigroups >= 0.16
+      , regex-tdfa >= 1.2
+      , stm >= 2.4
+      , text >= 1.2
+      , yaml >= 0.8
     hs-source-dirs: src
     ghc-options: -Wall
 
 executable sos
     main-is: Main.hs
     build-depends:
-        base >= 4.0 && < 6.0,
-        bytestring -any,
-        directory -any,
-        fsnotify -any,
-        filepath -any,
-        optparse-applicative -any,
-        regex-tdfa -any,
-        semigroups -any,
-        steeloverseer -any,
-        yaml -any
+        base >= 4.0 && < 6.0
+      , steeloverseer
+      , bytestring >= 0.10
+      , directory >= 1.2
+      , fsnotify >= 0.2
+      , filepath >= 1.4
+      , optparse-applicative >= 0.11
+      , regex-tdfa >= 1.2
+      , semigroups >= 0.16
+      , yaml >= 0.8
     hs-source-dirs: app
     ghc-options: -Wall -threaded
 
