@@ -3,6 +3,7 @@
 module Sos where
 
 import Control.Monad.Except
+import Control.Applicative
 import Data.ByteString      (ByteString)
 import System.Exit
 import Text.Megaparsec      (ParseError)
@@ -25,7 +26,7 @@ data SosException
           String                  -- string reason for failure
 
 instance Show SosException where
-    show (SosRegexException pattern err) = "Error compiling regex '" ++ BS.unpack pattern ++ "': " ++ err
+    show (SosRegexException pattrn err) = "Error compiling regex '" ++ BS.unpack pattrn ++ "': " ++ err
     show (SosCommandParseException template err) = "Error parsing command '" ++ BS.unpack template ++ "': " ++ show err
     show (SosCommandApplyException template vars err) = "Error applying template '" ++ reconstruct template ++ "' to " ++ show vars ++ ": " ++ err
       where

@@ -1,8 +1,8 @@
 - pattern: .*\.hs$
   commands:
-  - stack build
   - hlint \0
+  - stack build --fast
 - patterns:
   - ^steeloverseer\.cabal$
   - ^stack\.yaml$
-  command: stack build
+  command: stack build --fast

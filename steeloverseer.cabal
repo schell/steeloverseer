@@ -43,7 +43,7 @@ library
       , async >= 2.0
       , bytestring >= 0.10
       , containers >= 0.5
-      , megaparsec >= 4.2 && < 5.0
+      , megaparsec >= 4.4.0
       , microlens >= 0.2
       , mtl >= 2.2
       , process >= 1.2
