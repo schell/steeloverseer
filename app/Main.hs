@@ -28,10 +28,11 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.List.NonEmpty    as NE
 
 version :: String
-version = "Steel Overseer 2.0"
+version = "Steel Overseer 2.0.1"
 
 data Options = Options
     { optTarget   :: FilePath
+    , optRCFile   :: FilePath
     , optCommands :: [ByteString]
     , optPatterns :: [ByteString]
     } deriving Show
@@ -46,37 +47,42 @@ main = execParser opts >>= main'
 
     optsParser :: Parser Options
     optsParser = Options
-        <$> strArgument
-            ( help "File or directory to watch for changes."
+      <$> strArgument
+         ( help "Optional file or directory to watch for changes."
            <> metavar "TARGET"
            <> value "."
            <> showDefault )
-        <*> many (fmap BS.pack (strOption
-            ( long "command"
-           <> short 'c'
-           <> help "Add command to run on file event."
-           <> metavar "COMMAND" )))
-        <*> many (fmap BS.pack (strOption
-            ( long "pattern"
-           <> short 'p'
-           <> help "Add pattern to match on file path. Only relevant if the target is a directory. (default: .*)"
-           <> metavar "PATTERN" )))
+      <*> strOption
+         ( help "Optional rcfile to read patterns and commands from."
+           <> long "rcfile"
+           <> value ".sosrc"
+           <> showDefault )
+      <*> many (fmap BS.pack (strOption
+          ( long "command"
+         <> short 'c'
+         <> help "Add command to run on file event."
+         <> metavar "COMMAND" )))
+      <*> many (fmap BS.pack (strOption
+          ( long "pattern"
+         <> short 'p'
+         <> help "Add pattern to match on file path. Only relevant if the target is a directory. (default: .*)"
+         <> metavar "PATTERN" )))
 
 main' :: Options -> IO ()
 main' Options{..} = do
     -- Parse .sosrc rules.
-    rc_rules <- parseSosrc
+    rc_rules <- parseSosrc optRCFile
 
     -- Parse cli rules, where one rule is created per pattern that executes each
     -- of commands sequentially.
     cli_rules <- do
-        let patterns =
+        let ptterns =
                 case (rc_rules, optPatterns) of
                     -- If there are no commands in .sosrc, and no patterns
                     -- specified on the command line, default to ".*"
                     ([], []) -> [".*"]
                     _ -> optPatterns
-        runSos (mapM (\pattern -> buildRule pattern optCommands) patterns)
+        runSos (mapM (`buildRule` optCommands) ptterns)
 
     (target, rules) <- do
         is_dir  <- doesDirectoryExist optTarget
@@ -127,20 +133,20 @@ spawnFileWatcherThread wm job_queue target rules = do
 --------------------------------------------------------------------------------
 
 -- Parse a list of rules from .sosrc.
-parseSosrc :: IO [Rule]
-parseSosrc = do
-    exists <- doesFileExist ".sosrc"
+parseSosrc :: FilePath -> IO [Rule]
+parseSosrc sosrc = do
+    exists <- doesFileExist sosrc
     if exists
         then
-            decodeFileEither ".sosrc" >>= \case
+            decodeFileEither sosrc >>= \case
                 Left err -> do
-                    putStrLn ("Error parsing .sosrc:\n" ++ prettyPrintParseException err)
+                    putStrLn ("Error parsing " ++ show sosrc ++ ":\n" ++ prettyPrintParseException err)
                     exitFailure
                 Right (raw_rules :: [RawRule]) -> do
                     rules <- runSos (mapM buildRawRule raw_rules)
                     putStrLn (case length raw_rules of
-                                  1 -> "Found 1 rule in .sosrc"
-                                  n -> "Found " ++ show n ++ " rules in .sosrc")
+                                  1 -> "Found 1 rule in " ++ show sosrc
+                                  n -> "Found " ++ show n ++ " rules in " ++ show sosrc)
                     pure (concat rules)
         else pure []
 
