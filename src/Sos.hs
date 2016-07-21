@@ -25,4 +25,4 @@ runSos act =
     Left err -> do
       print err
       exitFailure
-    Right x -> pure x
+    Right x -> return x

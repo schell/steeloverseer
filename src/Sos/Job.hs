@@ -18,6 +18,7 @@ module Sos.Job
 
 import Sos.Utils
 
+import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Exception
@@ -26,10 +27,12 @@ import Data.Foldable            (find)
 import Data.List.NonEmpty       (NonEmpty(..))
 import Data.Monoid
 import Data.Sequence            (Seq, ViewL(..), (|>), viewl)
-import GHC.Exts                 (toList)
 import System.Exit
 import System.Process
 import Text.Printf
+
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Sequence      as Sequence
 
 
 type ShellCommand = String
@@ -66,7 +69,7 @@ clearJobQueue :: JobQueue -> IO ()
 clearJobQueue (JobQueue queue) = atomically (writeTVar queue mempty)
 
 jobQueueLength :: JobQueue -> IO Int
-jobQueueLength queue = length <$> jobQueueJobs queue
+jobQueueLength queue = Sequence.length <$> jobQueueJobs queue
 
 jobQueueJobs :: JobQueue -> IO (Seq Job)
 jobQueueJobs (JobQueue queue_tv) = atomically (readTVar queue_tv)
@@ -100,7 +103,7 @@ stepJobQueue (JobQueue queue_tv) = do
 
   putStrLn ("\n" <> cyan (jobHeader job))
 
-  a <- async (runShellCommands (toList (jobCommands job)))
+  a <- async (runShellCommands (NonEmpty.toList (jobCommands job)))
 
   let runJob :: STM JobResult
       runJob = do

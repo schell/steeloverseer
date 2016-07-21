@@ -13,10 +13,11 @@ import Sos.Exception
 import Sos.Job       (ShellCommand)
 import Sos.Utils
 
+import Control.Applicative
 import Control.Monad.Except
 import Data.ByteString      (ByteString)
 import Data.Monoid
-import Text.Megaparsec
+import Text.Parsec
 
 import qualified Data.Text.Encoding     as Text
 import qualified Data.Text.Lazy         as LText
@@ -43,18 +44,18 @@ type Template = [Either Int ByteString]
 
 parseTemplate :: MonadError SosException m => RawTemplate -> m Template
 parseTemplate template =
-  case runParser parser "" template of
+  case runParser parser () "" template of
     Left err -> throwError (SosCommandParseException template err)
-    Right x  -> pure x
+    Right x  -> return x
  where
-  parser :: Parsec ByteString Template
+  parser :: Parsec ByteString () Template
   parser = some (capturePart <|||> textPart)
    where
-    textPart :: Parsec ByteString ByteString
+    textPart :: Parsec ByteString () ByteString
     textPart = packBS <$> some (satisfy (/= '\\'))
 
-    capturePart :: Parsec ByteString Int
-    capturePart = read <$> (char '\\' *> some digitChar)
+    capturePart :: Parsec ByteString () Int
+    capturePart = read <$> (char '\\' *> some digit)
 
 -- Instantiate a template with a list of captured variables, per their indices.
 --
@@ -73,7 +74,7 @@ instantiateTemplate vars0 template0 = go 0 vars0 template0
   go _ [] template =
     case flattenTemplate template of
       Left err -> throwError (SosCommandApplyException template0 vars0 err)
-      Right x  -> pure x
+      Right x  -> return x
   go n (t:ts) template = go (n+1) ts (map f template)
    where
     f :: Either Int ByteString -> Either Int ByteString

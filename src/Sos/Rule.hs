@@ -76,9 +76,9 @@ buildRule pattrn templates0 = do
   regex <-
     case compile comp_opt exec_opt pattrn of
       Left err -> throwError (SosRegexException pattrn err)
-      Right x  -> pure x
+      Right x  -> return x
 
-  pure (Rule pattrn regex templates)
+  return (Rule pattrn regex templates)
 
 -- A "raw" Rule that is post-processed after being parsed from a yaml
 -- file. Namely, the regex is compiled and the commands are parsed into

@@ -7,7 +7,7 @@ module Sos.Exception
 import Sos.Utils
 
 import Data.ByteString (ByteString)
-import Text.Megaparsec (ParseError)
+import Text.Parsec     (ParseError)
 
 
 data SosException

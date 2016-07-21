@@ -24,6 +24,8 @@ import System.FSNotify
 import System.IO
 import Text.Regex.TDFA
 
+import qualified Data.Foldable as Foldable
+
 
 version :: String
 version = "Steel Overseer 2.0.1.0"
@@ -125,7 +127,7 @@ main' Options{..} = do
                   'a' -> pure False
                   'p' -> do
                     jobs <- jobQueueJobs job_queue
-                    forM_ (jobCommands <$> jobs) $
+                    Foldable.forM_ (jobCommands <$> jobs) $
                       (\(c:|cs) -> do
                         putStrLn ("- " ++ c)
                         mapM_ (putStrLn . ("  " ++)) cs)
