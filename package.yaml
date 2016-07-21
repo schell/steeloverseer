@@ -23,22 +23,20 @@ dependencies:
   - base >= 4.0 && < 6.0
   - bytestring >= 0.10
   - semigroups >= 0.16
+  - stm >= 2.4
   - yaml >= 0.8
 
 library:
   source-dirs: src
-  other-modules: ANSI
   dependencies:
     - aeson >= 0.8
     - ansi-terminal >= 0.6.2
     - async >= 2.0
     - containers >= 0.5
     - megaparsec >= 4.4.0
-    - microlens >= 0.2
     - mtl >= 2.2
     - process >= 1.2
     - regex-tdfa >= 1.2
-    - stm >= 2.4
     - text >= 1.2
   ghc-options: -Wall
 

@@ -1,14 +1,19 @@
-{-# LANGUAGE LambdaCase   #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 module Sos.Job
-  ( Job
+  ( Job(jobCommands)
   , JobQueue
+  , JobResult(..)
   , ShellCommand
   , newJobQueue
+  , clearJobQueue
+  , jobQueueLength
+  , jobQueueJobs
   , enqueueJob
-  , dequeueJob
-  , runJob
+  , stepJobQueue
   ) where
 
 import ANSI
@@ -18,25 +23,32 @@ import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
-import Data.Function         (fix)
-import Data.List.NonEmpty    (NonEmpty(..))
+import Data.Foldable            (find)
+import Data.List.NonEmpty       (NonEmpty(..))
 import Data.Monoid
-import Data.Sequence         (Seq, ViewL(..), (|>), viewl)
-import Lens.Micro            hiding (to)
-import System.Console.ANSI
+import Data.Sequence            (Seq, ViewL(..), (|>), viewl)
 import System.Exit
-import System.IO
 import System.Process
 import Text.Printf
 
 import qualified Data.List.NonEmpty as NE
 
+
 type ShellCommand = String
 
+
+data JobResult = JobSuccess | JobFailure
+
+
+-- | A 'Job' is an interruptible list of shell commands to run.
 data Job = Job
   { jobHeader   :: String
+    -- ^ String to print before running the job
   , jobCommands :: NonEmpty ShellCommand
-  , jobTMVar    :: TMVar ()
+    -- ^ The list of shell commands to run.
+  , jobRestart  :: TMVar ()
+    -- ^ A TMVar that, when written to, indicates this job should be
+    -- immediately canceled and restarted.
   }
 
 makeJob :: String -> NonEmpty ShellCommand -> STM Job
@@ -44,113 +56,88 @@ makeJob header cmds = do
   tmvar <- newEmptyTMVar
   pure (Job header cmds tmvar)
 
-jobEquals :: NonEmpty ShellCommand -> Job -> Bool
-jobEquals cmds job = cmds == jobCommands job
-
-data JobQueue
-  = JobQueue
-      (TVar (Maybe Job)) -- Currently running job
-      (TVar (Seq Job))   -- Queue of jobs to run
+-- | A 'JobQueue' is a mutable linked list of jobs. The job at the head of the
+-- list is assumed to be currently running, however, it is left in the list so
+-- it can be interrupted and restarted.
+newtype JobQueue = JobQueue (TVar (Seq Job))
 
 newJobQueue :: IO JobQueue
-newJobQueue = JobQueue <$> newTVarIO Nothing <*> newTVarIO mempty
+newJobQueue = JobQueue <$> newTVarIO mempty
+
+clearJobQueue :: JobQueue -> IO ()
+clearJobQueue (JobQueue queue) = atomically (writeTVar queue mempty)
+
+jobQueueLength :: JobQueue -> IO Int
+jobQueueLength queue = length <$> jobQueueJobs queue
+
+jobQueueJobs :: JobQueue -> IO (Seq Job)
+jobQueueJobs (JobQueue queue_tv) = atomically (readTVar queue_tv)
 
 enqueueJob :: String -> NonEmpty ShellCommand -> JobQueue -> IO ()
-enqueueJob header cmds (JobQueue running_tv queue_tv) = atomically $
-  readTVar running_tv >>= \case
-    Just job | cmds `jobEquals` job ->
-      restartJob job
-    _ -> do
-      queue <- readTVar queue_tv
-      unless (seqContains jobEquals cmds queue) $ do
-        new_job <- makeJob header cmds
-        modifyTVar' queue_tv (|> new_job)
-
--- | Dequeue a Job from a JobQueue. This assumes that there is no currently
--- running job, but does not actually check.
-dequeueJob :: JobQueue -> IO Job
-dequeueJob (JobQueue running_tv queue_tv) = atomically $ do
+enqueueJob header cmds (JobQueue queue_tv) = atomically $ do
   queue <- readTVar queue_tv
-  case viewl queue of
-    EmptyL -> retry
-    (job :< jobs) -> do
-      writeTVar running_tv (Just job)
-      writeTVar queue_tv jobs
-      pure job
 
-runJob :: JobQueue -> Job -> IO ()
-runJob job_queue@(JobQueue running_tv queue_tv)
-       job@(Job header cmds tmvar) = do
-  putStrLn ("\n" <> colored Cyan header)
+  case find (\j -> jobCommands j == cmds) queue of
+    -- If the job is not already enqueued, enqueue it.
+    Nothing -> do
+      job <- makeJob header cmds
+      writeTVar queue_tv (queue |> job)
+    -- Otherwise, if it's already been enqueued, put into its reset var.
+    -- This should only have an effect on the currently running job.
+    Just job -> restartJob job
 
-  a <- async (runShellCommands (NE.toList cmds))
+-- | Run the first job in the job queue, restarting it if signaled to do so.
+-- When this function returns, the job is popped off the job queue, and its
+-- result is returned.
+stepJobQueue :: JobQueue -> IO JobResult
+stepJobQueue (JobQueue queue_tv) = do
+  -- Read the first job, but don't actually pop it off of the queue
+  job <- atomically $ do
+    queue <- readTVar queue_tv
+    case viewl queue of
+      j :< _ -> do
+        unrestartJob j
+        pure j
+      _ -> retry
 
-  let lhs :: STM (Either SomeException JobResult)
-      lhs = waitCatchSTM a <* writeTVar running_tv Nothing
+  putStrLn ("\n" <> cyan (jobHeader job))
 
-      rhs :: STM ()
-      rhs = takeTMVar tmvar
+  a <- async (runShellCommands (NE.toList (jobCommands job)))
 
-  atomically (lhs <|||> rhs) >>= \case
-    -- Job threw an exception - a ThreadKilled we are
-    -- okay with, but anything else we should print to the
-    -- console.
-    Left (Left ex) ->
-      case fromException ex of
-        Just ThreadKilled -> pure ()
-        _ -> putStrLn (colored Red ("Exception: " ++ show ex))
+  let runJob :: STM JobResult
+      runJob = do
+        r <- waitSTM a
+        -- seqTail is safe here because this is the only function that pops
+        -- jobs off of the job queue, and we already saw one job in the queue
+        -- above.
+        modifyTVar' queue_tv seqTail
+        pure r
 
-    -- Commands finished successfully.
-    Left (Right JobSuccess) -> pure ()
-
-    -- A command failed - if there is another enqueued list
-    -- of commands to run, prompt the user to continue or
-    -- abort.
-    Left (Right JobFailure) -> do
-      queue <- atomically (readTVar queue_tv)
-      case length queue of
-        0 -> pure ()
-        n -> do
-          putStrLn (colored Yellow (show n ++ " job(s) still pending."))
-
-          hSetBuffering stdin NoBuffering
-          continue <- fix (\prompt -> do
-            putStr (colored Yellow "Press 'c' to continue, 'p' to print, or 'a' to abort: ")
-            hFlush stdout
-            (getChar <* putStrLn "") >>= \case
-              'c' -> pure True
-              'a' -> pure False
-              'p' -> do
-                mapM_ (\(c:|cs) -> do
-                          putStrLn ("- " ++ c)
-                          mapM_ (putStrLn . ("  " ++)) cs)
-                      (queue^..traversed.to jobCommands)
-                prompt
-              _ -> prompt)
-          hSetBuffering stdin LineBuffering
-
-          -- Here, it's possible we've reported that
-          -- `n` jobs were enqueued, but by the time
-          -- the user decides to abort them, more
-          -- were added. Oh well, delete them all.
-          unless continue $ do
-            n' <- atomically (length <$> swapTVar queue_tv mempty)
-            putStrLn (colored Red ("Aborted " ++ show n' ++ " job(s)."))
+  atomically (runJob <|||> shouldRestartJob job) >>= \case
+    -- Commands finished either successfully or unsuccessfully.
+    Left result -> pure result
 
     -- Another filesystem event triggered this list of commands
     -- to be run again - cancel the previous run and start over.
     Right () -> do
       cancel a
       _ <- waitCatch a
-      runJob job_queue job
+      stepJobQueue (JobQueue queue_tv)
 
 restartJob :: Job -> STM ()
-restartJob job = void (tryPutTMVar (jobTMVar job) ())
+restartJob job = void (tryPutTMVar (jobRestart job) ())
 
-data JobResult = JobSuccess | JobFailure
+-- | Clear any previous restart "ping"s that were sent to this job while it was
+-- sitting in the job queue (not at the front).
+unrestartJob :: Job -> STM ()
+unrestartJob = void . tryTakeTMVar . jobRestart
 
--- Run a list of shell commands sequentially. If a command returns ExitFailure,
--- don't run the rest. Return whether or not all commands completed
+shouldRestartJob :: Job -> STM ()
+shouldRestartJob = readTMVar . jobRestart
+
+-- | Run a list of shell commands sequentially. If a command returns
+-- ExitFailure, or an exception is thrown, don't run the rest (but also don't
+-- propagate the exception). Return whether or not all commands completed
 -- successfully.
 runShellCommands :: [ShellCommand] -> IO JobResult
 runShellCommands cmds0 = go 1 cmds0
@@ -158,31 +145,44 @@ runShellCommands cmds0 = go 1 cmds0
   go :: Int -> [ShellCommand] -> IO JobResult
   go _ [] = pure JobSuccess
   go n (cmd:cmds) = do
-    putStrLn (colored Magenta (printf "[%d/%d] " n (length cmds0)) <> cmd)
+    putStrLn (magenta (printf "[%d/%d] " n (length cmds0)) <> cmd)
 
-    let create = (\(_, _, _, ph) -> ph) <$> createProcess (shell cmd)
-        teardown ph = do
-          putStrLn (colored Yellow ("Canceling: " ++ cmd))
-          terminateProcess ph
-    bracketOnError create teardown waitForProcess >>= \case
-      ExitSuccess -> do
-        putStrLn (colored Green "Success ✓")
+    let acquire :: IO ProcessHandle
+        acquire = do
+          (_, _, _, ph) <- createProcess (shell cmd)
+          pure ph
+
+        release :: ProcessHandle -> IO ()
+        release = terminateProcess
+
+        action :: ProcessHandle -> IO ExitCode
+        action = waitForProcess
+
+    try (bracket acquire release action) >>= \case
+      Left (ex :: SomeException) -> do
+          -- We expect to get ThreadKilled exceptions when we get canceled and
+          -- restarted. Any other exception would be bizarre; just print it and
+          -- move on.
+          case fromException ex of
+            Just ThreadKilled -> putStrLn (yellow ("Canceling: " ++ cmd))
+            _                 -> putStrLn (red ("Exception: " ++ show ex))
+          pure JobFailure
+
+      Right ExitSuccess -> do
+        putStrLn (green "Success ✓")
         go (n+1) cmds
-      _ -> do
-        putStrLn (colored Red "Failure ✗")
+
+      Right (ExitFailure c) -> do
+        putStrLn (red (printf "Failure ✗ (%d)" c))
         pure JobFailure
-
-
-seqContains :: (a -> b -> Bool) -> a -> Seq b -> Bool
-seqContains _ _ (viewl -> EmptyL) = False
-seqContains p x (viewl -> y :< ys)
-    | p x y     = True
-    | otherwise = seqContains p x ys
 
 --------------------------------------------------------------------------------
 
-to :: (s -> a) -> (a -> Const r a) -> s -> Const r s
-to f g s = Const (getConst (g (f s)))
+seqTail :: Seq a -> Seq a
+seqTail s =
+  case viewl s of
+    _ :< xs -> xs
+    _       -> error "seqTail: empty sequence"
 
 (<|||>) :: Alternative f => f a -> f b -> f (Either a b)
 fa <|||> fb = Left <$> fa <|> Right <$> fb

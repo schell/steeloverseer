@@ -6,19 +6,22 @@
 
 module Main where
 
+import ANSI
 import Sos
 
 import Control.Monad
-import Data.ByteString     (ByteString)
+import Data.ByteString        (ByteString)
 import Data.Function
+import Data.List.NonEmpty     (NonEmpty(..))
 import Data.Monoid
-import Data.Yaml           (decodeFileEither, prettyPrintParseException)
-import Prelude             hiding (FilePath)
+import Data.Yaml              (decodeFileEither, prettyPrintParseException)
+import Prelude                hiding (FilePath)
 import Options.Applicative
 import System.Directory
 import System.Exit
 import System.FilePath
 import System.FSNotify
+import System.IO
 import Text.Regex.TDFA
 
 import qualified Data.ByteString.Char8 as BS
@@ -100,8 +103,46 @@ main' Options{..} = do
 
   withManager $ \wm -> do
     job_queue <- newJobQueue
+
     spawnFileWatcherThread wm job_queue target rules
-    forever (dequeueJob job_queue >>= runJob job_queue)
+
+    -- Run jobs forever, only stopping to prompt whether or not to run enqueued
+    -- jobs when a job fails. This way, the failing job's output will not be
+    -- lost by subsequent jobs' outputs without the user's consent.
+    forever $ do
+      stepJobQueue job_queue >>= \case
+        JobSuccess -> pure ()
+        JobFailure -> do
+          jobQueueLength job_queue >>= \case
+            0 -> pure ()
+            n -> do
+              putStrLn (yellow (show n ++ " job(s) still pending."))
+
+              hSetBuffering stdin NoBuffering
+              continue <- fix (\prompt -> do
+                putStr (yellow "Press 'c' to continue, 'p' to print, or 'a' to abort: ")
+                hFlush stdout
+                (getChar <* putStrLn "") >>= \case
+                  'c' -> pure True
+                  'a' -> pure False
+                  'p' -> do
+                    jobs <- jobQueueJobs job_queue
+                    forM_ (jobCommands <$> jobs) $
+                      (\(c:|cs) -> do
+                        putStrLn ("- " ++ c)
+                        mapM_ (putStrLn . ("  " ++)) cs)
+                    prompt
+                  _ -> prompt)
+              hSetBuffering stdin LineBuffering
+
+              -- Here, it's possible we initially reported that `n` jobs were
+              -- enqueued, but by the time the user decides to abort them, more
+              -- were added. Oh well, abort them all.
+              unless continue $ do
+                n' <- jobQueueLength job_queue
+                clearJobQueue job_queue
+                putStrLn (red ("Aborted " ++ show n' ++ " job(s)."))
+
 
 spawnFileWatcherThread :: WatchManager -> JobQueue -> FilePath -> [Rule] -> IO ()
 spawnFileWatcherThread wm job_queue target rules = do
@@ -115,8 +156,6 @@ spawnFileWatcherThread wm job_queue target rules = do
         any (\rule -> match (ruleRegex rule) (eventRelPath event)) rules
 
   _ <- watchTree wm target predicate $ \event -> do
-    putStrLn (eventRelPath event)
-
     let path = BS.pack (eventRelPath event)
 
     commands <- concat <$> mapM (instantiateTemplates path) rules
