@@ -164,8 +164,18 @@ runShellCommands cmds0 = go 1 cmds0
           -- restarted. Any other exception would be bizarre; just print it and
           -- move on.
           case fromException ex of
-            Just ThreadKilled -> putStrLn (yellow ("Canceling: " ++ cmd))
-            _                 -> putStrLn (red ("Exception: " ++ show ex))
+            Just ThreadKilled ->
+              case length cmds0 of
+                -- If this was a one-command job, just print that it's been
+                -- canceled. Otherwise, print a little graphic showing how much
+                -- of the job was completed before being restarted
+                1 -> putStrLn (yellow ("Restarting job: " ++ cmd))
+                _ -> do
+                  let (xs, ys) = splitAt (n-1) cmds0
+                  putStrLn (yellow "Restarting job:")
+                  mapM_ (putStrLn . yellow . printf "[✓] %s") xs
+                  mapM_ (putStrLn . yellow . printf "[ ] %s") ys
+            _ -> putStrLn (red ("Exception: " ++ show ex))
           pure JobFailure
 
       Right ExitSuccess -> do
