@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -9,15 +10,18 @@ module Sos.Template
   ) where
 
 import Sos.Exception
+import Sos.Job       (ShellCommand)
+import Sos.Utils
 
 import Control.Monad.Except
-import Data.ByteString (ByteString)
+import Data.ByteString      (ByteString)
 import Data.Monoid
 import Text.Megaparsec
 
-import qualified Data.ByteString.Char8      as BS
-import qualified Data.ByteString.Lazy.Char8 as BSL
-import qualified Data.ByteString.Builder    as BS
+import qualified Data.Text.Encoding     as Text
+import qualified Data.Text.Lazy         as LText
+import qualified Data.Text.Lazy.Builder as LText
+
 
 -- | A 'RawTemplate' represents a shell command, possibly containing capture
 -- groups, e.g. "ghc \0"
@@ -34,8 +38,8 @@ type RawTemplate = ByteString
 --
 --    [Right "gcc -c ", Left 1, Right ".c -o ", Left 1, Right ".c"]
 --
-type Template
-  = [Either Int ByteString]
+type Template = [Either Int ByteString]
+
 
 parseTemplate :: MonadError SosException m => RawTemplate -> m Template
 parseTemplate template =
@@ -44,11 +48,10 @@ parseTemplate template =
     Right x  -> pure x
  where
   parser :: Parsec ByteString Template
-  parser = some (Right <$> textPart
-             <|> Left  <$> capturePart)
+  parser = some (capturePart <|||> textPart)
    where
     textPart :: Parsec ByteString ByteString
-    textPart = BS.pack <$> some (satisfy (/= '\\'))
+    textPart = packBS <$> some (satisfy (/= '\\'))
 
     capturePart :: Parsec ByteString Int
     capturePart = read <$> (char '\\' *> some digitChar)
@@ -63,10 +66,10 @@ instantiateTemplate
   :: forall m. MonadError SosException m
   => [ByteString]
   -> Template
-  -> m String
+  -> m ShellCommand
 instantiateTemplate vars0 template0 = go 0 vars0 template0
  where
-  go :: Int -> [ByteString] -> Template -> m String
+  go :: Int -> [ByteString] -> Template -> m ShellCommand
   go _ [] template =
     case flattenTemplate template of
       Left err -> throwError (SosCommandApplyException template0 vars0 err)
@@ -80,10 +83,10 @@ instantiateTemplate vars0 template0 = go 0 vars0 template0
     f x = x
 
 -- Attempt to flatten a list of Rights to a single string.
-flattenTemplate :: Template -> Either String String
+flattenTemplate :: Template -> Either String ShellCommand
 flattenTemplate = go mempty
  where
-  go :: BS.Builder -> Template -> Either String String
-  go acc [] = Right (BSL.unpack (BS.toLazyByteString acc))
-  go acc (Right x : xs) = go (acc <> BS.byteString x) xs
+  go :: LText.Builder -> Template -> Either String ShellCommand
+  go !acc [] = Right (LText.unpack (LText.toLazyText acc))
+  go !acc (Right x : xs) = go (acc <> LText.fromText (Text.decodeUtf8 x)) xs
   go _   (Left n : _) = Left ("uninstantiated template variable \\" <> show n)

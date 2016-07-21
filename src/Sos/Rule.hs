@@ -23,7 +23,7 @@ import Data.Text                  (Text)
 import Text.Regex.TDFA
 import Text.Regex.TDFA.ByteString (compile)
 
-import qualified Data.Text.Encoding as T
+import qualified Data.Text.Encoding as Text
 
 
 -- | A 'ByteString' representing a pattern, e.g. "foo\.hs" or ".*\.c"
@@ -55,7 +55,7 @@ buildRule
   => RawPattern
   -> [RawTemplate]
   -> m Rule
-buildRule pattern templates0 = do
+buildRule pattrn templates0 = do
   templates <- mapM parseTemplate templates0
 
   -- Improve performance for patterns with no capture groups.
@@ -74,11 +74,11 @@ buildRule pattern templates0 = do
           _ -> (defaultCompOpt, defaultExecOpt)
 
   regex <-
-    case compile comp_opt exec_opt pattern of
-      Left err -> throwError (SosRegexException pattern err)
+    case compile comp_opt exec_opt pattrn of
+      Left err -> throwError (SosRegexException pattrn err)
       Right x  -> pure x
 
-  pure (Rule pattern regex templates)
+  pure (Rule pattrn regex templates)
 
 -- A "raw" Rule that is post-processed after being parsed from a yaml
 -- file. Namely, the regex is compiled and the commands are parsed into
@@ -95,12 +95,12 @@ instance FromJSON RawRule where
     parseCommands = fmap go (o .: "command" <|> o .: "commands")
 
     go :: OneOrList Text -> [ByteString]
-    go = map T.encodeUtf8 . listify
+    go = map Text.encodeUtf8 . listify
   parseJSON v = typeMismatch "command" v
 
 buildRawRule :: forall m. MonadError SosException m => RawRule -> m [Rule]
 buildRawRule (RawRule patterns templates) =
-  mapM (\pattern -> buildRule pattern templates) patterns
+  mapM (\pattrn -> buildRule pattrn templates) patterns
 
 --------------------------------------------------------------------------------
 

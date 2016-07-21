@@ -16,9 +16,8 @@ module Sos.Job
   , stepJobQueue
   ) where
 
-import ANSI
+import Sos.Utils
 
-import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Exception
@@ -27,11 +26,10 @@ import Data.Foldable            (find)
 import Data.List.NonEmpty       (NonEmpty(..))
 import Data.Monoid
 import Data.Sequence            (Seq, ViewL(..), (|>), viewl)
+import GHC.Exts                 (toList)
 import System.Exit
 import System.Process
 import Text.Printf
-
-import qualified Data.List.NonEmpty as NE
 
 
 type ShellCommand = String
@@ -102,7 +100,7 @@ stepJobQueue (JobQueue queue_tv) = do
 
   putStrLn ("\n" <> cyan (jobHeader job))
 
-  a <- async (runShellCommands (NE.toList (jobCommands job)))
+  a <- async (runShellCommands (toList (jobCommands job)))
 
   let runJob :: STM JobResult
       runJob = do
@@ -152,13 +150,7 @@ runShellCommands cmds0 = go 1 cmds0
           (_, _, _, ph) <- createProcess (shell cmd)
           pure ph
 
-        release :: ProcessHandle -> IO ()
-        release = terminateProcess
-
-        action :: ProcessHandle -> IO ExitCode
-        action = waitForProcess
-
-    try (bracket acquire release action) >>= \case
+    try (bracket acquire terminateProcess waitForProcess) >>= \case
       Left (ex :: SomeException) -> do
           -- We expect to get ThreadKilled exceptions when we get canceled and
           -- restarted. Any other exception would be bizarre; just print it and
@@ -193,6 +185,3 @@ seqTail s =
   case viewl s of
     _ :< xs -> xs
     _       -> error "seqTail: empty sequence"
-
-(<|||>) :: Alternative f => f a -> f b -> f (Either a b)
-fa <|||> fb = Left <$> fa <|> Right <$> fb

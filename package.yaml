@@ -22,8 +22,10 @@ extra-source-files:
 dependencies:
   - base >= 4.0 && < 6.0
   - bytestring >= 0.10
+  - regex-tdfa >= 1.2
   - semigroups >= 0.16
   - stm >= 2.4
+  - text >= 1.2
   - yaml >= 0.8
 
 library:
@@ -36,8 +38,6 @@ library:
     - megaparsec >= 4.4.0
     - mtl >= 2.2
     - process >= 1.2
-    - regex-tdfa >= 1.2
-    - text >= 1.2
   ghc-options: -Wall
 
 executables:
@@ -50,5 +50,4 @@ executables:
       - fsnotify >= 0.2
       - filepath >= 1.4
       - optparse-applicative >= 0.11
-      - regex-tdfa >= 1.2
     ghc-options: -Wall -threaded

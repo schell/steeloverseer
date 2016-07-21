@@ -4,10 +4,10 @@ module Sos.Exception
   ( SosException(..)
   ) where
 
+import Sos.Utils
+
 import Data.ByteString (ByteString)
 import Text.Megaparsec (ParseError)
-
-import qualified Data.ByteString.Char8 as BS
 
 
 data SosException
@@ -27,9 +27,9 @@ data SosException
 
 instance Show SosException where
   show (SosRegexException pattrn err) =
-    "Error compiling regex '" ++ BS.unpack pattrn ++ "': " ++ err
+    "Error compiling regex '" ++ unpackBS pattrn ++ "': " ++ err
   show (SosCommandParseException template err) =
-    "Error parsing command '" ++ BS.unpack template ++ "': " ++ show err
+    "Error parsing command '" ++ unpackBS template ++ "': " ++ show err
   show (SosCommandApplyException template vars err) =
     "Error applying template '" ++ reconstruct template ++ "' to " ++   show vars ++ ": " ++ err
    where
@@ -37,4 +37,4 @@ instance Show SosException where
     reconstruct = concatMap
       (\case
         Left n   -> '\\' : show n
-        Right bs -> BS.unpack bs)
+        Right bs -> unpackBS bs)

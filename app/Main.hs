@@ -6,8 +6,8 @@
 
 module Main where
 
-import ANSI
 import Sos
+import Sos.Utils
 
 import Control.Monad
 import Data.ByteString        (ByteString)
@@ -15,7 +15,7 @@ import Data.Function
 import Data.List.NonEmpty     (NonEmpty(..))
 import Data.Monoid
 import Data.Yaml              (decodeFileEither, prettyPrintParseException)
-import Prelude                hiding (FilePath)
+import GHC.Exts               (fromList)
 import Options.Applicative
 import System.Directory
 import System.Exit
@@ -24,8 +24,6 @@ import System.FSNotify
 import System.IO
 import Text.Regex.TDFA
 
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.List.NonEmpty    as NE
 
 version :: String
 version = "Steel Overseer 2.0.1"
@@ -57,12 +55,12 @@ main = execParser opts >>= main'
        <> long "rcfile"
        <> value ".sosrc"
        <> showDefault )
-    <*> many (fmap BS.pack (strOption
+    <*> many (fmap packBS (strOption
       ( long "command"
         <> short 'c'
         <> help "Add command to run on file event."
         <> metavar "COMMAND" )))
-    <*> many (fmap BS.pack (strOption
+    <*> many (fmap packBS (strOption
       ( long "pattern"
         <> short 'p'
         <> help "Add pattern to match on file path. Only relevant if the target is a directory. (default: .*)"
@@ -76,14 +74,14 @@ main' Options{..} = do
   -- Parse cli rules, where one rule is created per pattern that executes
   -- each of @optCommands@ sequentially.
   cli_rules <- do
-    let ptterns :: [RawPattern]
-        ptterns =
+    let patterns :: [RawPattern]
+        patterns =
           case (rc_rules, optPatterns) of
             -- If there are no commands in .sosrc, and no patterns
             -- specified on the command line, default to ".*"
             ([], []) -> [".*"]
             _ -> optPatterns
-    runSos (mapM (`buildRule` optCommands) ptterns)
+    runSos (mapM (`buildRule` optCommands) patterns)
 
   (target, rules) <- do
     is_dir  <- doesDirectoryExist optTarget
@@ -93,7 +91,7 @@ main' Options{..} = do
       -- If the target is a single file, completely ignore the .sosrc
       -- commands and the cli commands.
       (_, True) -> do
-        rule <- runSos (buildRule (BS.pack optTarget) optCommands)
+        rule <- runSos (buildRule (packBS optTarget) optCommands)
         pure (takeDirectory optTarget, [rule])
       _ -> do
         putStrLn ("Target " ++ optTarget ++ " is not a file or directory.")
@@ -156,11 +154,11 @@ spawnFileWatcherThread wm job_queue target rules = do
         any (\rule -> match (ruleRegex rule) (eventRelPath event)) rules
 
   _ <- watchTree wm target predicate $ \event -> do
-    let path = BS.pack (eventRelPath event)
+    let path = packBS (eventRelPath event)
 
     commands <- concat <$> mapM (instantiateTemplates path) rules
     when (commands /= [])
-      (enqueueJob (showEvent event cwd) (NE.fromList commands) job_queue)
+      (enqueueJob (showEvent event cwd) (fromList commands) job_queue)
 
   pure ()
  where
@@ -168,7 +166,8 @@ spawnFileWatcherThread wm job_queue target rules = do
   instantiateTemplates path Rule{..} =
     case match ruleRegex path of
       [] -> pure []
-      (captures:_) -> runSos (mapM (instantiateTemplate captures) ruleTemplates)
+      (captures:_) ->
+        runSos (mapM (instantiateTemplate captures) ruleTemplates)
 
 --------------------------------------------------------------------------------
 
