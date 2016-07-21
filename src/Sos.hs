@@ -5,12 +5,14 @@ module Sos
   , runSos
   , module Sos.Exception
   , module Sos.Job
+  , module Sos.JobQueue
   , module Sos.Rule
   , module Sos.Template
   ) where
 
 import Sos.Exception
 import Sos.Job
+import Sos.JobQueue
 import Sos.Rule
 import Sos.Template
 

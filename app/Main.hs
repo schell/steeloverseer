@@ -110,7 +110,7 @@ main' Options{..} = do
     -- jobs when a job fails. This way, the failing job's output will not be
     -- lost by subsequent jobs' outputs without the user's consent.
     forever $ do
-      stepJobQueue job_queue >>= \case
+      dequeueJob job_queue >>= \case
         JobSuccess -> pure ()
         JobFailure -> do
           jobQueueLength job_queue >>= \case

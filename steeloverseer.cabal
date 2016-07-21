@@ -35,6 +35,7 @@ library
           Sos
           Sos.Exception
           Sos.Job
+          Sos.JobQueue
           Sos.Rule
           Sos.Template
           Sos.Utils
