@@ -26,7 +26,7 @@ import Text.Regex.TDFA
 
 
 version :: String
-version = "Steel Overseer 2.0.1"
+version = "Steel Overseer 2.0.1.0"
 
 data Options = Options
   { optTarget   :: FilePath
@@ -171,7 +171,7 @@ spawnFileWatcherThread wm job_queue target rules = do
 
 --------------------------------------------------------------------------------
 
--- Parse a list of rules from .sosrc.
+-- Parse a list of rules from an rcfile.
 parseSosrc :: FilePath -> IO [Rule]
 parseSosrc sosrc = do
   exists <- doesFileExist sosrc
