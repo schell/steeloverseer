@@ -1,0 +1,56 @@
+name: steeloverseer
+version: '2.0.1.0'
+license: BSD3
+license-file: LICENSE
+maintainer: schell.scivally@synapsegrop.com
+stability: stable
+homepage: https://github.com/schell/steeloverseer
+bug-reports: https://github.com/schell/steeloverseer/issues
+synopsis: A file watcher and development tool.
+description: >
+    A command line tool that responds to filesystem events.
+    Allows the user to automatically execute commands after
+    files are added or updated. Watches files using regular
+    expressions.
+category: Development
+author:
+  - Schell Scivally
+  - Mitchell Rosen
+extra-source-files:
+  - README.md
+
+dependencies:
+  - base >= 4.0 && < 6.0
+  - bytestring >= 0.10
+  - semigroups >= 0.16
+  - yaml >= 0.8
+
+library:
+  source-dirs: src
+  other-modules: ANSI
+  dependencies:
+    - aeson >= 0.8
+    - ansi-terminal >= 0.6.2
+    - async >= 2.0
+    - containers >= 0.5
+    - megaparsec >= 4.4.0
+    - microlens >= 0.2
+    - mtl >= 2.2
+    - process >= 1.2
+    - regex-tdfa >= 1.2
+    - stm >= 2.4
+    - text >= 1.2
+  ghc-options: -Wall
+
+executables:
+  sos:
+    main: Main.hs
+    source-dirs: app
+    dependencies:
+      - steeloverseer
+      - directory >= 1.2
+      - fsnotify >= 0.2
+      - filepath >= 1.4
+      - optparse-applicative >= 0.11
+      - regex-tdfa >= 1.2
+    ghc-options: -Wall -threaded

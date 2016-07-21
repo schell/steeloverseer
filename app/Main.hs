@@ -6,10 +6,7 @@
 
 module Main where
 
-import Job
-import Rule
 import Sos
-import Template
 
 import Control.Monad
 import Data.ByteString     (ByteString)
@@ -33,8 +30,8 @@ version = "Steel Overseer 2.0.1"
 data Options = Options
     { optTarget   :: FilePath
     , optRCFile   :: FilePath
-    , optCommands :: [ByteString]
-    , optPatterns :: [ByteString]
+    , optCommands :: [RawTemplate]
+    , optPatterns :: [RawPattern]
     } deriving Show
 
 main :: IO ()
@@ -73,10 +70,11 @@ main' Options{..} = do
     -- Parse .sosrc rules.
     rc_rules <- parseSosrc optRCFile
 
-    -- Parse cli rules, where one rule is created per pattern that executes each
-    -- of commands sequentially.
+    -- Parse cli rules, where one rule is created per pattern that executes
+    -- each of @optCommands@ sequentially.
     cli_rules <- do
-        let ptterns =
+        let ptterns :: [RawPattern]
+            ptterns =
                 case (rc_rules, optPatterns) of
                     -- If there are no commands in .sosrc, and no patterns
                     -- specified on the command line, default to ".*"
@@ -116,6 +114,8 @@ spawnFileWatcherThread wm job_queue target rules = do
         predicate event = any (\rule -> match (ruleRegex rule) (eventRelPath event)) rules
 
     _ <- watchTree wm target predicate $ \event -> do
+        putStrLn (eventRelPath event)
+
         let path = BS.pack (eventRelPath event)
 
         commands <- concat <$> mapM (instantiateTemplates path) rules
