@@ -15,7 +15,6 @@ import Data.Function
 import Data.List.NonEmpty     (NonEmpty(..))
 import Data.Monoid
 import Data.Yaml              (decodeFileEither, prettyPrintParseException)
-import GHC.Exts               (fromList)
 import Options.Applicative
 import System.Directory
 import System.Exit
@@ -159,8 +158,9 @@ spawnFileWatcherThread wm job_queue target rules = do
     let path = packBS (eventRelPath event)
 
     commands <- concat <$> mapM (instantiateTemplates path) rules
-    when (commands /= [])
-      (enqueueJob (showEvent event cwd) (fromList commands) job_queue)
+    case commands of
+      [] -> pure ()
+      (c:cs) -> enqueueJob (showEvent event cwd) (c :| cs) job_queue
 
   pure ()
  where

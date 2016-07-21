@@ -81,7 +81,7 @@ matrix:
     compiler: ": #stack default osx"
     os: osx
 
-  - env: BUILD=stack ARGS="--stack-yaml stack-lts-2.22.yaml"
+  - env: BUILD=stack ARGS="--stack-yaml stack-lts-2.22-osx.yaml"
     compiler: ": #stack 7.8.4 osx"
     os: osx
 

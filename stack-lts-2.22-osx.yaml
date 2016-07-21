@@ -1,0 +1,9 @@
+resolver: lts-2.22
+
+extra-deps:
+  - fsnotify-0.2.1
+  - hfsevents-0.1.6
+
+flags:
+  steeloverseer:
+    mtl-compat: true
