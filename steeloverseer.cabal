@@ -52,7 +52,6 @@ library
         , ansi-terminal >= 0.6.2
         , async >= 2.0
         , containers >= 0.5
-        , parsec >= 3.1
         , mtl >= 2.1
         , process >= 1.2
     if flag(mtl-compat)

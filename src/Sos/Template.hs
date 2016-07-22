@@ -15,9 +15,9 @@ import Sos.Utils
 
 import Control.Applicative
 import Control.Monad.Except
-import Data.ByteString      (ByteString)
+import Data.ByteString              (ByteString)
 import Data.Monoid
-import Text.Parsec
+import Text.ParserCombinators.ReadP
 
 import qualified Data.Text.Encoding     as Text
 import qualified Data.Text.Lazy         as LText
@@ -43,19 +43,22 @@ type Template = [Either Int ByteString]
 
 
 parseTemplate :: MonadError SosException m => RawTemplate -> m Template
-parseTemplate template =
-  case runParser parser () "" template of
-    Left err -> throwError (SosCommandParseException template err)
-    Right x  -> return x
+parseTemplate raw_template =
+  case readP_to_S parser (unpackBS raw_template) of
+    [(template, "")] -> return template
+    _ -> throwError (SosCommandParseException raw_template)
  where
-  parser :: Parsec ByteString () Template
+  parser :: ReadP Template
   parser = some (capturePart <|||> textPart)
    where
-    textPart :: Parsec ByteString () ByteString
-    textPart = packBS <$> some (satisfy (/= '\\'))
-
-    capturePart :: Parsec ByteString () Int
+    capturePart :: ReadP Int
     capturePart = read <$> (char '\\' *> some digit)
+     where
+      digit :: ReadP Char
+      digit = satisfy (\c -> c >= '0' && c <= '9')
+
+    textPart :: ReadP ByteString
+    textPart = packBS <$> some (satisfy (/= '\\'))
 
 -- Instantiate a template with a list of captured variables, per their indices.
 --
@@ -73,8 +76,10 @@ instantiateTemplate vars0 template0 = go 0 vars0 template0
   go :: Int -> [ByteString] -> Template -> m ShellCommand
   go _ [] template =
     case flattenTemplate template of
-      Left err -> throwError (SosCommandApplyException template0 vars0 err)
-      Right x  -> return x
+      Left n ->
+        let err = "uninstantiated template variable: \\" ++ show n
+        in throwError (SosCommandApplyException template0 vars0 err)
+      Right x -> return x
   go n (t:ts) template = go (n+1) ts (map f template)
    where
     f :: Either Int ByteString -> Either Int ByteString
@@ -84,10 +89,14 @@ instantiateTemplate vars0 template0 = go 0 vars0 template0
     f x = x
 
 -- Attempt to flatten a list of Rights to a single string.
-flattenTemplate :: Template -> Either String ShellCommand
+flattenTemplate :: Template -> Either Int ShellCommand
 flattenTemplate = go mempty
  where
-  go :: LText.Builder -> Template -> Either String ShellCommand
+  go :: LText.Builder -> Template -> Either Int ShellCommand
   go !acc [] = Right (LText.unpack (LText.toLazyText acc))
-  go !acc (Right x : xs) = go (acc <> LText.fromText (Text.decodeUtf8 x)) xs
-  go _   (Left n : _) = Left ("uninstantiated template variable \\" <> show n)
+  go !acc (x:xs) =
+    case x of
+      Right s ->
+        let acc' = acc <> LText.fromText (Text.decodeUtf8 s)
+        in go acc' xs
+      Left n -> Left n

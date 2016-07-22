@@ -7,7 +7,6 @@ module Sos.Exception
 import Sos.Utils
 
 import Data.ByteString (ByteString)
-import Text.Parsec     (ParseError)
 
 
 data SosException
@@ -18,7 +17,6 @@ data SosException
   -- Error parsing a command template.
   | SosCommandParseException
       ByteString -- template
-      ParseError -- failure
   -- Error applying a list of captured variables to a command template.
   | SosCommandApplyException
       [Either Int ByteString] -- template
@@ -28,8 +26,8 @@ data SosException
 instance Show SosException where
   show (SosRegexException pattrn err) =
     "Error compiling regex '" ++ unpackBS pattrn ++ "': " ++ err
-  show (SosCommandParseException template err) =
-    "Error parsing command '" ++ unpackBS template ++ "': " ++ show err
+  show (SosCommandParseException template) =
+    "Error parsing command '" ++ unpackBS template ++ "'"
   show (SosCommandApplyException template vars err) =
     "Error applying template '" ++ reconstruct template ++ "' to " ++   show vars ++ ": " ++ err
    where
