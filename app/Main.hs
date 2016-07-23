@@ -1,29 +1,26 @@
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Main where
 
 import Sos
 import Sos.Utils
 
+import Control.Concurrent.Async
+import Control.Concurrent.Chan
 import Control.Monad
+import Control.Monad.Except
 import Data.ByteString        (ByteString)
-import Data.Function
 import Data.List.NonEmpty     (NonEmpty(..))
 import Data.Monoid
 import Data.Yaml              (decodeFileEither, prettyPrintParseException)
 import Options.Applicative
+import Streaming
 import System.Directory
 import System.Exit
 import System.FilePath
-import System.FSNotify
 import System.IO
-import Text.Regex.TDFA
 
-import qualified Data.Foldable as Foldable
+import qualified Data.Foldable     as Foldable
+import qualified Streaming.Prelude as S
+import qualified System.FSNotify   as FSNotify
 
 
 version :: String
@@ -100,76 +97,69 @@ main' Options{..} = do
 
   putStrLn "Hit Ctrl+C to quit."
 
-  withManager $ \wm -> do
+  FSNotify.withManager $ \manager -> do
     job_queue <- newJobQueue
 
-    spawnFileWatcherThread wm job_queue target rules
+    let enqueue_thread :: IO a
+        enqueue_thread =
+          runSos (sosEnqueueJobs rules (eventStream manager target) job_queue)
 
-    -- Run jobs forever, only stopping to prompt whether or not to run enqueued
-    -- jobs when a job fails. This way, the failing job's output will not be
-    -- lost by subsequent jobs' outputs without the user's consent.
-    forever $ do
-      dequeueJob job_queue >>= \case
-        JobSuccess -> pure ()
-        JobFailure -> do
-          jobQueueLength job_queue >>= \case
-            0 -> pure ()
-            n -> do
-              putStrLn (yellow (show n ++ " job(s) still pending."))
+        -- Run jobs forever, only stopping to prompt whether or not to run
+        -- enqueued jobs when a job fails. This way, the failing job's output
+        -- will not be lost by subsequent jobs' outputs without the user's
+        -- consent.
+        dequeue_thread :: IO a
+        dequeue_thread = forever $ do
+          dequeueJob job_queue >>= \case
+            JobSuccess -> pure ()
+            JobFailure -> do
+              jobQueueLength job_queue >>= \case
+                0 -> pure ()
+                n -> do
+                  putStrLn (yellow (show n ++ " job(s) still pending."))
 
-              hSetBuffering stdin NoBuffering
-              continue <- fix (\prompt -> do
-                putStr (yellow "Press 'c' to continue, 'p' to print, or 'a' to abort: ")
-                hFlush stdout
-                (getChar <* putStrLn "") >>= \case
-                  'c' -> pure True
-                  'a' -> pure False
-                  'p' -> do
-                    jobs <- jobQueueJobs job_queue
-                    Foldable.forM_ (jobCommands <$> jobs) $
-                      (\(c:|cs) -> do
-                        putStrLn ("- " ++ c)
-                        mapM_ (putStrLn . ("  " ++)) cs)
-                    prompt
-                  _ -> prompt)
-              hSetBuffering stdin LineBuffering
+                  hSetBuffering stdin NoBuffering
+                  continue <- fix (\prompt -> do
+                    putStr (yellow "Press 'c' to continue, 'p' to print, or 'a' to abort: ")
+                    hFlush stdout
+                    (getChar <* putStrLn "") >>= \case
+                      'c' -> pure True
+                      'a' -> pure False
+                      'p' -> do
+                        jobs <- jobQueueJobs job_queue
+                        Foldable.forM_ (jobCommands <$> jobs) $
+                          (\(c:|cs) -> do
+                            putStrLn ("- " ++ c)
+                            mapM_ (putStrLn . ("  " ++)) cs)
+                        prompt
+                      _ -> prompt)
+                  hSetBuffering stdin LineBuffering
 
-              -- Here, it's possible we initially reported that `n` jobs were
-              -- enqueued, but by the time the user decides to abort them, more
-              -- were added. Oh well, abort them all.
-              unless continue $ do
-                n' <- jobQueueLength job_queue
-                clearJobQueue job_queue
-                putStrLn (red ("Aborted " ++ show n' ++ " job(s)."))
+                  unless continue $ do
+                    n' <- jobQueueLength job_queue
+                    clearJobQueue job_queue
+                    putStrLn (red ("Aborted " ++ show n' ++ " job(s)."))
 
+    race_ enqueue_thread dequeue_thread
 
-spawnFileWatcherThread :: WatchManager -> JobQueue -> FilePath -> [Rule] -> IO ()
-spawnFileWatcherThread wm job_queue target rules = do
-  cwd <- getCurrentDirectory
-
-  let eventRelPath :: Event -> FilePath
-      eventRelPath event = makeRelative cwd (eventPath event)
-
-      predicate :: Event -> Bool
-      predicate event =
-        any (\rule -> match (ruleRegex rule) (eventRelPath event)) rules
-
-  _ <- watchTree wm target predicate $ \event -> do
-    let path = packBS (eventRelPath event)
-
-    commands <- concat <$> mapM (instantiateTemplates path) rules
-    case commands of
-      [] -> pure ()
-      (c:cs) -> enqueueJob (showEvent event cwd) (c :| cs) job_queue
-
-  pure ()
- where
-  instantiateTemplates :: ByteString -> Rule -> IO [ShellCommand]
-  instantiateTemplates path Rule{..} =
-    case match ruleRegex path of
-      [] -> pure []
-      (captures:_) ->
-        runSos (mapM (instantiateTemplate captures) ruleTemplates)
+-- | Make a stream of 'FileEvent's from a watched directory.
+eventStream
+  :: MonadIO m
+  => FSNotify.WatchManager
+  -> FilePath
+  -> Stream (Of FileEvent) m a
+eventStream manager target = do
+  cwd  <- liftIO getCurrentDirectory
+  chan <- liftIO newChan
+  _    <- liftIO (FSNotify.watchTreeChan manager target (const True) chan)
+  forever $
+    liftIO (readChan chan) >>= \case
+      FSNotify.Added    path _ -> S.yield (FileAdded    (go cwd path))
+      FSNotify.Modified path _ -> S.yield (FileModified (go cwd path))
+      FSNotify.Removed  _    _ -> pure ()
+   where
+    go :: FilePath -> FilePath -> ByteString
+    go cwd path = packBS (makeRelative cwd path)
 
 --------------------------------------------------------------------------------
 
@@ -190,10 +180,3 @@ parseSosrc sosrc = do
                       n -> "Found " ++ show n ++ " rules in " ++ show sosrc)
           pure (concat rules)
     else pure []
-
---------------------------------------------------------------------------------
-
-showEvent :: Event -> FilePath -> String
-showEvent (Added fp _)    cwd = "Added: "    ++ makeRelative cwd fp
-showEvent (Modified fp _) cwd = "Modified: " ++ makeRelative cwd fp
-showEvent (Removed fp _)  cwd = "Removed: "  ++ makeRelative cwd fp

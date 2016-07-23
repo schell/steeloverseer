@@ -1,10 +1,5 @@
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns        #-}
-
 module Sos.Job
-  ( Job(jobHeader, jobCommands)
+  ( Job(jobEvent, jobCommands)
   , JobResult(..)
   , ShellCommand
   , newJob
@@ -14,6 +9,7 @@ module Sos.Job
   , shouldRestartJob
   ) where
 
+import Sos.FileEvent
 import Sos.Utils
 
 import Control.Applicative
@@ -37,8 +33,8 @@ data JobResult = JobSuccess | JobFailure
 
 -- | A 'Job' is an interruptible list of shell commands to run.
 data Job = Job
-  { jobHeader   :: String
-    -- ^ String to print before running the job
+  { jobEvent    :: FileEvent
+    -- ^ Event that triggered this job.
   , jobCommands :: NonEmpty ShellCommand
     -- ^ The list of shell commands to run.
   , jobRestart  :: TMVar ()
@@ -46,10 +42,10 @@ data Job = Job
     -- immediately canceled and restarted.
   }
 
-newJob :: String -> NonEmpty ShellCommand -> STM Job
-newJob header cmds = do
+newJob :: FileEvent -> NonEmpty ShellCommand -> STM Job
+newJob event cmds = do
   tmvar <- newEmptyTMVar
-  pure (Job header cmds tmvar)
+  pure (Job event cmds tmvar)
 
 restartJob :: Job -> STM ()
 restartJob job = void (tryPutTMVar (jobRestart job) ())

@@ -18,36 +18,37 @@ author:
 extra-source-files:
   - README.md
 
-flags:
-  mtl-compat:
-    description: Depend on mtl-compat for Control.Monad.Except
-    manual: false
-    default: false
-
 ghc-options: -Wall
 
+default-extensions:
+  - BangPatterns
+  - DeriveFunctor
+  - FlexibleContexts
+  - LambdaCase
+  - OverloadedStrings
+  - RecordWildCards
+  - ScopedTypeVariables
+  - ViewPatterns
+
 dependencies:
-  - base >= 4.0 && < 6.0
+  - async      >= 2.0
+  - base       >= 4.0 && < 5.0
   - bytestring >= 0.10
+  - mtl        >= 2.2
   - regex-tdfa >= 1.2
   - semigroups >= 0.16
-  - stm >= 2.4
-  - text >= 1.2
-  - yaml >= 0.8
+  - stm        >= 2.4
+  - streaming  >= 0.1.0 && < 0.1.5
+  - text       >= 1.2
+  - yaml       >= 0.8
 
 library:
   source-dirs: src
   dependencies:
-    - aeson >= 0.8
+    - aeson         >= 0.8
     - ansi-terminal >= 0.6.2
-    - async >= 2.0
-    - containers >= 0.5
-    - mtl >= 2.1
-    - process >= 1.2
-  when:
-    - condition: flag(mtl-compat)
-      dependencies:
-        - mtl-compat >= 0.2
+    - containers    >= 0.5
+    - process       >= 1.2
 
 executables:
   sos:

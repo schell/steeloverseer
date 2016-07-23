@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Sos.JobQueue
   ( JobQueue
   , newJobQueue
@@ -10,6 +8,7 @@ module Sos.JobQueue
   , dequeueJob
   ) where
 
+import Sos.FileEvent
 import Sos.Job
 import Sos.Utils
 
@@ -40,14 +39,14 @@ jobQueueLength queue = Sequence.length <$> jobQueueJobs queue
 jobQueueJobs :: JobQueue -> IO (Seq Job)
 jobQueueJobs (JobQueue queue_tv) = atomically (readTVar queue_tv)
 
-enqueueJob :: String -> NonEmpty ShellCommand -> JobQueue -> IO ()
-enqueueJob header cmds (JobQueue queue_tv) = atomically $ do
+enqueueJob :: FileEvent -> NonEmpty ShellCommand -> JobQueue -> IO ()
+enqueueJob event cmds (JobQueue queue_tv) = atomically $ do
   queue <- readTVar queue_tv
 
   case find (\j -> jobCommands j == cmds) queue of
     -- If the job is not already enqueued, enqueue it.
     Nothing -> do
-      job <- newJob header cmds
+      job <- newJob event cmds
       writeTVar queue_tv (queue |> job)
     -- Otherwise, if it's already been enqueued, put into its reset var.
     -- This should only have an effect on the currently running job.
@@ -67,7 +66,7 @@ dequeueJob (JobQueue queue_tv) = do
         pure j
       _ -> retry
 
-  putStrLn ("\n" <> cyan (jobHeader job))
+  putStrLn ("\n" <> cyan (showFileEvent (jobEvent job)))
 
   a <- async (runJob job)
 
@@ -98,3 +97,8 @@ seqTail s =
   case viewl s of
     _ :< xs -> xs
     _       -> error "seqTail: empty sequence"
+
+showFileEvent :: FileEvent -> String
+showFileEvent = \case
+  FileAdded    path -> unpackBS ("Added: "    <> path)
+  FileModified path -> unpackBS ("Modified: " <> path)

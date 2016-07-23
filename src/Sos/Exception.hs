@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Sos.Exception
   ( SosException(..)
   ) where

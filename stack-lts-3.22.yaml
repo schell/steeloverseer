@@ -1,0 +1,4 @@
+resolver: lts-3.22
+
+extra-deps:
+  - streaming-0.1.4.3
