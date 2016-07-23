@@ -60,7 +60,7 @@ unrestartJob = void . tryTakeTMVar . jobRestart
 shouldRestartJob :: Job -> STM ()
 shouldRestartJob = readTMVar . jobRestart
 
--- | Run a job's list of shell commands sequentially. If a command returns
+-- | Run a Job's list of shell commands sequentially. If a command returns
 -- ExitFailure, or an exception is thrown, don't run the rest (but also don't
 -- propagate the exception). Return whether or not all commands completed
 -- successfully.

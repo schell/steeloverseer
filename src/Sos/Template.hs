@@ -43,18 +43,18 @@ parseTemplate raw_template =
   case readP_to_S parser (unpackBS raw_template) of
     [(template, "")] -> return template
     _ -> throwError (SosCommandParseException raw_template)
-
-parser :: ReadP Template
-parser = some (capturePart <|||> textPart) <* eof
  where
-  capturePart :: ReadP Int
-  capturePart = read <$> (char '\\' *> munch1 digit)
+  parser :: ReadP Template
+  parser = some (capturePart <|||> textPart) <* eof
    where
-    digit :: Char -> Bool
-    digit c = c >= '0' && c <= '9'
+    capturePart :: ReadP Int
+    capturePart = read <$> (char '\\' *> munch1 digit)
+     where
+      digit :: Char -> Bool
+      digit c = c >= '0' && c <= '9'
 
-  textPart :: ReadP ByteString
-  textPart = packBS <$> munch1 (/= '\\')
+    textPart :: ReadP ByteString
+    textPart = packBS <$> munch1 (/= '\\')
 
 -- Instantiate a template with a list of captured variables, per their indices.
 --

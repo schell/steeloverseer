@@ -20,6 +20,7 @@ data SosException
       [Either Int ByteString] -- template
       [ByteString]            -- captured variables
       String                  -- string reason for failure
+  deriving Eq
 
 instance Show SosException where
   show (SosRegexException pattrn err) =

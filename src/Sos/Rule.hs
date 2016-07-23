@@ -33,13 +33,12 @@ type RawPattern = ByteString
 --
 --     - pattern: .*.c
 --     - commands:
---       - gcc -c {1}
+--       - gcc -c \1
 --
 -- because there is only one capture variable, and it has with index 0.
 --
 data Rule = Rule
-  { rulePattern   :: RawPattern -- Text from which the regex was compiled.
-  , ruleRegex     :: Regex      -- Compiled regex of command pattern.
+  { ruleRegex     :: Regex      -- Compiled regex of command pattern.
   , ruleTemplates :: [Template] -- Command template.
   }
 
@@ -73,7 +72,7 @@ buildRule pattrn templates0 = do
       Left err -> throwError (SosRegexException pattrn err)
       Right x  -> return x
 
-  return (Rule pattrn regex templates)
+  return (Rule regex templates)
 
 -- A "raw" Rule that is post-processed after being parsed from a yaml
 -- file. Namely, the regex is compiled and the commands are parsed into

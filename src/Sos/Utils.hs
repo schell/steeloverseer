@@ -11,7 +11,7 @@ import qualified Data.Text.Encoding as Text
 (<|||>) :: Alternative f => f a -> f b -> f (Either a b)
 fa <|||> fb = Left <$> fa <|> Right <$> fb
 
--- The proper way to make a 'ByteString' from a String - Data.ByteString.Char8
+-- The proper way to make a ByteString from a String - Data.ByteString.Char8
 -- will snip each Char to 8 bits.
 packBS :: String -> ByteString
 packBS = Text.encodeUtf8 . Text.pack

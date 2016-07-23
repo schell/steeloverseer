@@ -82,3 +82,28 @@ executable sos
           app
     default-extensions: BangPatterns DeriveFunctor FlexibleContexts LambdaCase OverloadedStrings RecordWildCards ScopedTypeVariables ViewPatterns
     ghc-options: -Wall -threaded
+
+test-suite spec
+    type: exitcode-stdio-1.0
+    main-is: Spec.hs
+    hs-source-dirs:
+          test
+    default-extensions: BangPatterns DeriveFunctor FlexibleContexts LambdaCase OverloadedStrings RecordWildCards ScopedTypeVariables ViewPatterns
+    ghc-options: -Wall
+    build-depends:
+          async      >= 2.0
+        , base       >= 4.0 && < 5.0
+        , bytestring >= 0.10
+        , mtl        >= 2.2
+        , regex-tdfa >= 1.2
+        , semigroups >= 0.16
+        , stm        >= 2.4
+        , streaming  >= 0.1.0 && < 0.1.5
+        , text       >= 1.2
+        , yaml       >= 0.8
+        , steeloverseer
+        , hspec
+    other-modules:
+          Sos.JobQueueSpec
+          Sos.TemplateSpec
+    default-language: Haskell2010
