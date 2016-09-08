@@ -3,8 +3,9 @@ module Main where
 import Sos
 import Sos.Utils
 
+import qualified System.FSNotify.Streaming as FSNotify
+
 import Control.Concurrent.Async
-import Control.Concurrent.Chan
 import Control.Monad
 import Control.Monad.Except
 import Data.ByteString        (ByteString)
@@ -20,7 +21,6 @@ import System.IO
 
 import qualified Data.Foldable     as Foldable
 import qualified Streaming.Prelude as S
-import qualified System.FSNotify   as FSNotify
 
 
 version :: String
@@ -97,69 +97,67 @@ main' Options{..} = do
 
   putStrLn "Hit Ctrl+C to quit."
 
-  FSNotify.withManager $ \manager -> do
-    job_queue <- newJobQueue
+  job_queue <- newJobQueue
 
-    let enqueue_thread :: IO a
-        enqueue_thread =
-          runSos (sosEnqueueJobs rules (eventStream manager target) job_queue)
+  let enqueue_thread :: IO a
+      enqueue_thread =
+        runSos (sosEnqueueJobs rules (watchTree target) job_queue)
 
-        -- Run jobs forever, only stopping to prompt whether or not to run
-        -- enqueued jobs when a job fails. This way, the failing job's output
-        -- will not be lost by subsequent jobs' outputs without the user's
-        -- consent.
-        dequeue_thread :: IO a
-        dequeue_thread = forever $ do
-          dequeueJob job_queue >>= \case
-            JobSuccess -> pure ()
-            JobFailure -> do
-              jobQueueLength job_queue >>= \case
-                0 -> pure ()
-                n -> do
-                  putStrLn (yellow (show n ++ " job(s) still pending."))
+      -- Run jobs forever, only stopping to prompt whether or not to run
+      -- enqueued jobs when a job fails. This way, the failing job's output
+      -- will not be lost by subsequent jobs' outputs without the user's
+      -- consent.
+      dequeue_thread :: IO a
+      dequeue_thread = forever $ do
+        dequeueJob job_queue >>= \case
+          JobSuccess -> pure ()
+          JobFailure -> do
+            jobQueueLength job_queue >>= \case
+              0 -> pure ()
+              n -> do
+                putStrLn (yellow (show n ++ " job(s) still pending."))
 
-                  hSetBuffering stdin NoBuffering
-                  continue <- fix (\prompt -> do
-                    putStr (yellow "Press 'c' to continue, 'p' to print, or 'a' to abort: ")
-                    hFlush stdout
-                    (getChar <* putStrLn "") >>= \case
-                      'c' -> pure True
-                      'a' -> pure False
-                      'p' -> do
-                        jobs <- jobQueueJobs job_queue
-                        Foldable.forM_ (jobCommands <$> jobs) $
-                          (\(c:|cs) -> do
-                            putStrLn ("- " ++ c)
-                            mapM_ (putStrLn . ("  " ++)) cs)
-                        prompt
-                      _ -> prompt)
-                  hSetBuffering stdin LineBuffering
+                hSetBuffering stdin NoBuffering
+                continue <- fix (\prompt -> do
+                  putStr (yellow "Press 'c' to continue, 'p' to print, or 'a' to abort: ")
+                  hFlush stdout
+                  (getChar <* putStrLn "") >>= \case
+                    'c' -> pure True
+                    'a' -> pure False
+                    'p' -> do
+                      jobs <- jobQueueJobs job_queue
+                      Foldable.forM_ (jobCommands <$> jobs) $
+                        (\(c:|cs) -> do
+                          putStrLn ("- " ++ c)
+                          mapM_ (putStrLn . ("  " ++)) cs)
+                      prompt
+                    _ -> prompt)
+                hSetBuffering stdin LineBuffering
 
-                  unless continue $ do
-                    n' <- jobQueueLength job_queue
-                    clearJobQueue job_queue
-                    putStrLn (red ("Aborted " ++ show n' ++ " job(s)."))
+                unless continue $ do
+                  n' <- jobQueueLength job_queue
+                  clearJobQueue job_queue
+                  putStrLn (red ("Aborted " ++ show n' ++ " job(s)."))
 
-    race_ enqueue_thread dequeue_thread
+  race_ enqueue_thread dequeue_thread
 
--- | Make a stream of 'FileEvent's from a watched directory.
-eventStream
-  :: MonadIO m
-  => FSNotify.WatchManager
-  -> FilePath
-  -> Stream (Of FileEvent) m a
-eventStream manager target = do
-  cwd  <- liftIO getCurrentDirectory
-  chan <- liftIO newChan
-  _    <- liftIO (FSNotify.watchTreeChan manager target (const True) chan)
-  forever $
-    liftIO (readChan chan) >>= \case
-      FSNotify.Added    path _ -> S.yield (FileAdded    (go cwd path))
-      FSNotify.Modified path _ -> S.yield (FileModified (go cwd path))
-      FSNotify.Removed  _    _ -> pure ()
-   where
-    go :: FilePath -> FilePath -> ByteString
-    go cwd path = packBS (makeRelative cwd path)
+watchTree
+  :: forall m a.
+     MonadResource m
+  => FilePath -> Stream (Of FileEvent) m a
+watchTree target = do
+  cwd <- liftIO getCurrentDirectory
+
+  let stream :: Stream (Of FSNotify.Event) m a
+      stream = FSNotify.watchTree FSNotify.defaultConfig target (const True)
+
+  S.for stream (\case
+    FSNotify.Added    path _ -> S.yield (FileAdded    (go cwd path))
+    FSNotify.Modified path _ -> S.yield (FileModified (go cwd path))
+    FSNotify.Removed  _    _ -> pure ())
+ where
+  go :: FilePath -> FilePath -> ByteString
+  go cwd path = packBS (makeRelative cwd path)
 
 --------------------------------------------------------------------------------
 

@@ -19,20 +19,21 @@ import Sos.Template
 
 import Control.Applicative
 import Control.Monad.Except
-import Data.List.NonEmpty   (NonEmpty(..))
+import Control.Monad.Trans.Resource
+import Data.List.NonEmpty           (NonEmpty(..))
 import Streaming
 import System.Exit
-import Text.Regex.TDFA      (match)
+import Text.Regex.TDFA              (match)
 
 import qualified Streaming.Prelude as S
 
 
-type Sos a = ExceptT SosException IO a
+type Sos a = ResourceT (ExceptT SosException IO) a
 
 -- | Run an 'Sos' action in IO, exiting if any 'SosException's are thrown.
 runSos :: Sos a -> IO a
 runSos act =
-  runExceptT act >>= \case
+  runExceptT (runResourceT act) >>= \case
     Left err -> do
       print err
       exitFailure
@@ -42,7 +43,7 @@ runSos act =
 -- rules to each emitted file event from the given stream. This function
 -- returns when the stream is exhausted.
 sosEnqueueJobs
-  :: (Applicative m, MonadError SosException m, MonadIO m)
+  :: (Applicative m, MonadError SosException m, MonadResource m)
   => [Rule]
   -> Stream (Of FileEvent) m a
   -> JobQueue
