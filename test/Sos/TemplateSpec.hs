@@ -2,7 +2,6 @@ module Sos.TemplateSpec where
 
 import Sos.Template
 
-import Data.Either (isLeft)
 import Test.Hspec
 
 spec :: Spec
@@ -29,3 +28,7 @@ spec = do
     it "errors when there are not enough capture groups" $ do
       instantiateTemplate []    [Left 0] `shouldSatisfy` isLeft
       instantiateTemplate ["a"] [Left 1] `shouldSatisfy` isLeft
+
+isLeft :: Either a b -> Bool
+isLeft (Left _) = True
+isLeft _ = False
