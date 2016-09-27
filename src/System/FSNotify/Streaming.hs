@@ -5,6 +5,8 @@ module System.FSNotify.Streaming
     -- * Re-exports
   , Event(..)
   , WatchManager
+  , WatchConfig(..)
+  , Debounce(..)
   , defaultConfig
   ) where
 
