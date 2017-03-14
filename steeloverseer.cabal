@@ -27,7 +27,6 @@ source-repository head
 
 library
     exposed-modules:
-          Sos
           Sos.Exception
           Sos.FileEvent
           Sos.Job

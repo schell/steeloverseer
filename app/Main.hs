@@ -2,7 +2,11 @@
 
 module Main where
 
-import Sos
+import Sos.FileEvent
+import Sos.Job
+import Sos.JobQueue
+import Sos.Rule
+import Sos.Template
 import Sos.Utils
 
 import qualified System.FSNotify.Streaming as FSNotify
@@ -22,6 +26,7 @@ import System.Directory
 import System.Exit
 import System.FilePath
 import System.IO
+import Text.Regex.TDFA (match)
 
 import qualified Data.Foldable     as Foldable
 import qualified Streaming.Prelude as S
@@ -103,9 +108,22 @@ main' Options{..} = do
 
   job_queue <- newJobQueue
 
-  let enqueue_thread :: IO ()
+  let event_stream :: Stream (Of FileEvent) Managed ()
+      event_stream = watchTree target
+
+      job_stream :: Stream (Of (FileEvent, NonEmpty ShellCommand)) Managed ()
+      job_stream =
+        S.for event_stream
+          (\event ->
+            liftIO (eventCommands rules event) >>= \case
+              [] -> pure ()
+              (c:cs) -> S.yield (event, c :| cs))
+
+      enqueue_thread :: Managed ()
       enqueue_thread =
-        runManaged (sosEnqueueJobs rules (watchTree target) job_queue)
+        S.mapM_
+          (\(event, cmds) -> liftIO (enqueueJob event cmds job_queue))
+          job_stream
 
       -- Run jobs forever, only stopping to prompt whether or not to run
       -- enqueued jobs when a job fails. This way, the failing job's output
@@ -143,7 +161,16 @@ main' Options{..} = do
                   clearJobQueue job_queue
                   putStrLn (red ("Aborted " ++ show n' ++ " job(s)."))
 
-  race_ enqueue_thread dequeue_thread
+  race_ (runManaged enqueue_thread) dequeue_thread
+
+eventCommands :: [Rule] -> FileEvent -> IO [ShellCommand]
+eventCommands rules event = concat <$> mapM go rules
+ where
+  go :: Rule -> IO [ShellCommand]
+  go rule =
+    case match (ruleRegex rule) (fileEventPath event) of
+      []     -> pure []
+      (xs:_) -> mapM (instantiateTemplate xs) (ruleTemplates rule)
 
 watchTree :: forall a. FilePath -> Stream (Of FileEvent) Managed a
 watchTree target = do
@@ -174,7 +201,8 @@ parseSosrc sosrc = do
     then
       decodeFileEither sosrc >>= \case
         Left err -> do
-          putStrLn ("Error parsing " ++ show sosrc ++ ":\n" ++ prettyPrintParseException err)
+          putStrLn ("Error parsing " ++ show sosrc ++ ":\n" ++
+            prettyPrintParseException err)
           exitFailure
         Right (raw_rules :: [RawRule]) -> do
           rules <- mapM buildRawRule raw_rules
