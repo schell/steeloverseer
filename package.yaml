@@ -24,6 +24,7 @@ default-extensions:
   - BangPatterns
   - DeriveFunctor
   - FlexibleContexts
+  - InstanceSigs
   - LambdaCase
   - OverloadedStrings
   - RecordWildCards
@@ -34,10 +35,11 @@ dependencies:
   - async      >= 2.0
   - base       >= 4.0 && < 5.0
   - bytestring >= 0.10
+  - exceptions
   - fsnotify   >= 0.2
+  - managed
   - mtl        >= 2.2
   - regex-tdfa >= 1.2
-  - resourcet  >= 1.0
   - semigroups >= 0.16
   - stm        >= 2.4
   - streaming  >= 0.1.0 && < 0.1.5

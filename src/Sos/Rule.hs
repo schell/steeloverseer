@@ -10,11 +10,11 @@ import Sos.Exception
 import Sos.Template
 
 import Control.Applicative
-import Control.Monad.Except
+import Control.Monad.Catch (MonadThrow, throwM)
 import Data.Aeson.Types
-import Data.ByteString            (ByteString)
+import Data.ByteString (ByteString)
 import Data.Either
-import Data.Text                  (Text)
+import Data.Text (Text)
 import Text.Regex.TDFA
 import Text.Regex.TDFA.ByteString (compile)
 
@@ -44,11 +44,7 @@ data Rule = Rule
 
 -- Build a 'Rule' from a 'RawPattern' and a list of 'RawTemplate' by compiling
 -- the pattern regex and parsing each template.
-buildRule
-  :: forall m. MonadError SosException m
-  => RawPattern
-  -> [RawTemplate]
-  -> m Rule
+buildRule :: MonadThrow m => RawPattern -> [RawTemplate] -> m Rule
 buildRule pattrn templates0 = do
   templates <- mapM parseTemplate templates0
 
@@ -69,7 +65,7 @@ buildRule pattrn templates0 = do
 
   regex <-
     case compile comp_opt exec_opt pattrn of
-      Left err -> throwError (SosRegexException pattrn err)
+      Left err -> throwM (SosRegexException pattrn err)
       Right x  -> return x
 
   return (Rule regex templates)
@@ -92,7 +88,7 @@ instance FromJSON RawRule where
     go = map Text.encodeUtf8 . listify
   parseJSON v = typeMismatch "command" v
 
-buildRawRule :: forall m. MonadError SosException m => RawRule -> m [Rule]
+buildRawRule :: MonadThrow m => RawRule -> m [Rule]
 buildRawRule (RawRule patterns templates) =
   mapM (\pattrn -> buildRule pattrn templates) patterns
 

@@ -4,6 +4,7 @@ module Sos.Exception
 
 import Sos.Utils
 
+import Control.Exception (Exception)
 import Data.ByteString (ByteString)
 
 
@@ -35,3 +36,5 @@ instance Show SosException where
       (\case
         Left n   -> '\\' : show n
         Right bs -> unpackBS bs)
+
+instance Exception SosException

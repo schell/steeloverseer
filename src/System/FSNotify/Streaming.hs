@@ -11,18 +11,28 @@ module System.FSNotify.Streaming
   ) where
 
 import Control.Concurrent.Chan
+import Control.Exception (bracket)
 import Control.Monad
-import Control.Monad.Trans.Resource
+import Control.Monad.Managed
 import Streaming
 import Streaming.Prelude (yield)
 import System.FSNotify
 
 watchTree
-  :: MonadResource m
-  => WatchConfig -> FilePath -> (Event -> Bool) -> Stream (Of Event) m a
+  :: WatchConfig -> FilePath -> (Event -> Bool) -> Stream (Of Event) Managed a
 watchTree config path predicate = do
-  chan         <- liftIO newChan
-  (_, manager) <- allocate (startManagerConf config) stopManager
-  _            <- allocate (watchTreeChan manager path predicate chan) id
+  chan <- liftIO newChan
+
+  manager <- lift (managed (withManagerConf config))
+
+  lift (managed_ (withTreeChan manager path predicate chan))
 
   forever (liftIO (readChan chan) >>= yield)
+
+withTreeChan
+  :: WatchManager -> FilePath -> ActionPredicate -> EventChannel -> IO a -> IO a
+withTreeChan manager path predicate chan act =
+  bracket
+    (watchTreeChan manager path predicate chan)
+    id
+    (\_ -> act)

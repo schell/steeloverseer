@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Main where
 
 import Sos
@@ -6,12 +8,14 @@ import Sos.Utils
 import qualified System.FSNotify.Streaming as FSNotify
 
 import Control.Concurrent.Async
+import Control.Exception (Exception)
 import Control.Monad
-import Control.Monad.Except
-import Data.ByteString        (ByteString)
-import Data.List.NonEmpty     (NonEmpty(..))
+import Control.Monad.Managed
+import Data.ByteString (ByteString)
+import Data.Function (fix)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid
-import Data.Yaml              (decodeFileEither, prettyPrintParseException)
+import Data.Yaml (decodeFileEither, prettyPrintParseException)
 import Options.Applicative
 import Streaming
 import System.Directory
@@ -79,7 +83,7 @@ main' Options{..} = do
             -- specified on the command line, default to ".*"
             ([], []) -> [".*"]
             _ -> optPatterns
-    runSos (mapM (`buildRule` optCommands) patterns)
+    mapM (`buildRule` optCommands) patterns
 
   (target, rules) <- do
     is_dir  <- doesDirectoryExist optTarget
@@ -89,7 +93,7 @@ main' Options{..} = do
       -- If the target is a single file, completely ignore the .sosrc
       -- commands and the cli commands.
       (_, True) -> do
-        rule <- runSos (buildRule (packBS optTarget) optCommands)
+        rule <- buildRule (packBS optTarget) optCommands
         pure (takeDirectory optTarget, [rule])
       _ -> do
         putStrLn ("Target " ++ optTarget ++ " is not a file or directory.")
@@ -99,9 +103,9 @@ main' Options{..} = do
 
   job_queue <- newJobQueue
 
-  let enqueue_thread :: IO a
+  let enqueue_thread :: IO ()
       enqueue_thread =
-        runSos (sosEnqueueJobs rules (watchTree target) job_queue)
+        runManaged (sosEnqueueJobs rules (watchTree target) job_queue)
 
       -- Run jobs forever, only stopping to prompt whether or not to run
       -- enqueued jobs when a job fails. This way, the failing job's output
@@ -141,10 +145,7 @@ main' Options{..} = do
 
   race_ enqueue_thread dequeue_thread
 
-watchTree
-  :: forall m a.
-     MonadResource m
-  => FilePath -> Stream (Of FileEvent) m a
+watchTree :: forall a. FilePath -> Stream (Of FileEvent) Managed a
 watchTree target = do
   cwd <- liftIO getCurrentDirectory
 
@@ -152,7 +153,7 @@ watchTree target = do
       config = FSNotify.defaultConfig
         { FSNotify.confDebounce = FSNotify.Debounce 0.1 }
 
-      stream :: Stream (Of FSNotify.Event) m a
+      stream :: Stream (Of FSNotify.Event) Managed a
       stream = FSNotify.watchTree config target (const True)
 
   S.for stream (\case
@@ -176,9 +177,16 @@ parseSosrc sosrc = do
           putStrLn ("Error parsing " ++ show sosrc ++ ":\n" ++ prettyPrintParseException err)
           exitFailure
         Right (raw_rules :: [RawRule]) -> do
-          rules <- runSos (mapM buildRawRule raw_rules)
+          rules <- mapM buildRawRule raw_rules
           putStrLn (case length raw_rules of
                       1 -> "Found 1 rule in " ++ show sosrc
                       n -> "Found " ++ show n ++ " rules in " ++ show sosrc)
           pure (concat rules)
     else pure []
+
+--------------------------------------------------------------------------------
+-- Orphan instances
+
+instance MonadThrow Managed where
+  throwM :: Exception e => e -> Managed a
+  throwM e = managed (\_ -> throwM e)
