@@ -72,7 +72,7 @@ instantiateTemplate vars0 template0 = go 0 vars0 template0
       Left n ->
         let err = "uninstantiated template variable: \\" ++ show n
         in throwM (SosCommandApplyException template0 vars0 err)
-      Right x -> pure x
+      Right x -> return x
   go n (t:ts) template = go (n+1) ts (map f template)
    where
     f :: Either Int ByteString -> Either Int ByteString

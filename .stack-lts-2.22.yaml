@@ -2,6 +2,7 @@ resolver: lts-2.22
 
 extra-deps:
   - fsnotify-0.2.1
+  - managed-1.0.5
   - mtl-2.2.1
   - streaming-0.1.4.3
   - transformers-0.4.3.0
