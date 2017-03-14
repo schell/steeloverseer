@@ -1,22 +1,16 @@
 module Sos.Job
-  ( Job(jobEvent, jobCommands)
-  , JobResult(..)
+  ( Job(..)
   , ShellCommand
-  , newJob
   , runJob
-  , restartJob
-  , unrestartJob
-  , shouldRestartJob
   ) where
 
 import Sos.FileEvent
 import Sos.Utils
 
 import Control.Applicative
-import Control.Concurrent.STM
 import Control.Exception
-import Control.Monad
-import Data.List.NonEmpty     (NonEmpty)
+import Data.Function (on)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Monoid
 import System.Exit
 import System.Process
@@ -27,48 +21,25 @@ import qualified Data.List.NonEmpty as NonEmpty
 
 type ShellCommand = String
 
-
-data JobResult = JobSuccess | JobFailure
-
-
--- | A 'Job' is an interruptible list of shell commands to run.
+-- | A 'Job' is a list of shell commands to run, along with the 'FileEvent' that
+-- triggered the job.
 data Job = Job
-  { jobEvent    :: FileEvent
-    -- ^ Event that triggered this job.
-  , jobCommands :: NonEmpty ShellCommand
-    -- ^ The list of shell commands to run.
-  , jobRestart  :: TMVar ()
-    -- ^ A TMVar that, when written to, indicates this job should be
-    -- immediately canceled and restarted.
+  { jobEvent    :: FileEvent             -- ^ Event that triggered this job.
+  , jobCommands :: NonEmpty ShellCommand -- ^ The list of shell commands to run.
   }
 
-newJob :: FileEvent -> NonEmpty ShellCommand -> STM Job
-newJob event cmds = do
-  tmvar <- newEmptyTMVar
-  pure (Job event cmds tmvar)
-
-restartJob :: Job -> STM ()
-restartJob job = void (tryPutTMVar (jobRestart job) ())
-
--- | Clear any previous restart "ping"s that were sent to this job while it was
--- sitting in the job queue (not at the front).
-unrestartJob :: Job -> STM ()
-unrestartJob = void . tryTakeTMVar . jobRestart
-
--- | An STM action that returns when this job should be restarted, and retries
--- otherwise.
-shouldRestartJob :: Job -> STM ()
-shouldRestartJob = readTMVar . jobRestart
+-- | Non-stanard Eq instance: Job equality compares only the shell commands it's
+-- associated with.
+instance Eq Job where
+  (==) = (==) `on` jobCommands
 
 -- | Run a Job's list of shell commands sequentially. If a command returns
--- ExitFailure, or an exception is thrown, don't run the rest (but also don't
--- propagate the exception). Return whether or not all commands completed
--- successfully.
-runJob :: Job -> IO JobResult
+-- ExitFailure, or an exception is thrown, propagate the exception.
+runJob :: Job -> IO ()
 runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
  where
-  go :: Int -> [ShellCommand] -> IO JobResult
-  go _ [] = pure JobSuccess
+  go :: Int -> [ShellCommand] -> IO ()
+  go _ [] = pure ()
   go n (cmd:cmds) = do
     putStrLn (magenta (printf "[%d/%d] " n (length cmds0)) <> cmd)
 
@@ -79,28 +50,17 @@ runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
 
     try (bracket acquire terminateProcess waitForProcess) >>= \case
       Left (ex :: SomeException) -> do
-          -- We expect to get ThreadKilled exceptions when we get canceled and
-          -- restarted. Any other exception would be bizarre; just print it and
-          -- move on.
-          case fromException ex of
-            Just ThreadKilled ->
-              case length cmds0 of
-                -- If this was a one-command job, just print that it's been
-                -- canceled. Otherwise, print a little graphic showing how much
-                -- of the job was completed before being restarted
-                1 -> putStrLn (yellow ("Restarting job: " ++ cmd))
-                _ -> do
-                  let (xs, ys) = splitAt (n-1) cmds0
-                  putStrLn (yellow "Restarting job:")
-                  mapM_ (putStrLn . yellow . printf "[✓] %s") xs
-                  mapM_ (putStrLn . yellow . printf "[ ] %s") ys
-            _ -> putStrLn (red ("Exception: " ++ show ex))
-          pure JobFailure
+        case fromException ex of
+          Just ThreadKilled -> do
+            putStrLn (yellow "Job interrupted ✗")
+            throwIO ThreadKilled
+          _ -> do
+            putStrLn (red (show ex))
+            throwIO ex
 
       Right ExitSuccess -> do
         putStrLn (green "Success ✓")
         go (n+1) cmds
 
-      Right (ExitFailure c) -> do
-        putStrLn (red (printf "Failure ✗ (%d)" c))
-        pure JobFailure
+      Right (ExitFailure c) ->
+        throwIO (ExitFailure c)

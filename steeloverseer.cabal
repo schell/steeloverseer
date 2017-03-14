@@ -27,10 +27,10 @@ source-repository head
 
 library
     exposed-modules:
+          Control.Concurrent.STM.TQueue.Extra
           Sos.Exception
           Sos.FileEvent
           Sos.Job
-          Sos.JobQueue
           Sos.Rule
           Sos.Template
           Sos.Utils
@@ -112,6 +112,5 @@ test-suite spec
         , steeloverseer
         , hspec
     other-modules:
-          Sos.JobQueueSpec
           Sos.TemplateSpec
     default-language: Haskell2010
