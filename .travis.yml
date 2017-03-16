@@ -59,11 +59,11 @@ matrix:
     compiler: ": #stack default"
     addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
 
-  - env: BUILD=stack ARGS="--stack-yaml stack-lts-2.22.yaml"
+  - env: BUILD=stack ARGS="--stack-yaml .stack-lts-2.22.yaml"
     compiler: ": #stack 7.8.4"
     addons: {apt: {packages: [ghc-7.8.4], sources: [hvr-ghc]}}
 
-  - env: BUILD=stack ARGS="--stack-yaml stack-lts-3.22.yaml"
+  - env: BUILD=stack ARGS="--stack-yaml .stack-lts-3.22.yaml"
     compiler: ": #stack 7.10.2"
     addons: {apt: {packages: [ghc-7.10.2], sources: [hvr-ghc]}}
 
@@ -81,11 +81,11 @@ matrix:
     compiler: ": #stack default osx"
     os: osx
 
-  - env: BUILD=stack ARGS="--stack-yaml stack-lts-2.22-osx.yaml"
+  - env: BUILD=stack ARGS="--stack-yaml .stack-lts-2.22-osx.yaml"
     compiler: ": #stack 7.8.4 osx"
     os: osx
 
-  - env: BUILD=stack ARGS="--stack-yaml stack-lts-3.22.yaml"
+  - env: BUILD=stack ARGS="--stack-yaml .stack-lts-3.22.yaml"
     compiler: ": #stack 7.10.2 osx"
     os: osx
 

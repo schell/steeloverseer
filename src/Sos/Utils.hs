@@ -10,6 +10,7 @@ import qualified Data.Text.Encoding as Text
 
 (<|||>) :: Alternative f => f a -> f b -> f (Either a b)
 fa <|||> fb = Left <$> fa <|> Right <$> fb
+infixl 3 <|||>
 
 -- The proper way to make a ByteString from a String - Data.ByteString.Char8
 -- will snip each Char to 8 bits.

@@ -22,8 +22,10 @@ ghc-options: -Wall
 
 default-extensions:
   - BangPatterns
+  - DeriveDataTypeable
   - DeriveFunctor
   - FlexibleContexts
+  - InstanceSigs
   - LambdaCase
   - OverloadedStrings
   - RecordWildCards
@@ -31,18 +33,19 @@ default-extensions:
   - ViewPatterns
 
 dependencies:
-  - async      >= 2.0
-  - base       >= 4.0 && < 5.0
+  - async >= 2.0
+  - base >= 4.0 && < 5.0
   - bytestring >= 0.10
-  - fsnotify   >= 0.2
-  - mtl        >= 2.2
+  - exceptions
+  - fsnotify >= 0.2
+  - managed >= 1.0.1
+  - mtl >= 2.2
   - regex-tdfa >= 1.2
-  - resourcet  >= 1.0
   - semigroups >= 0.16
-  - stm        >= 2.4
-  - streaming  >= 0.1.0 && < 0.1.5
-  - text       >= 1.2
-  - yaml       >= 0.8
+  - stm >= 2.4
+  - streaming >= 0.1.0 && < 0.1.5
+  - text >= 1.2
+  - yaml >= 0.8
 
 library:
   source-dirs: src

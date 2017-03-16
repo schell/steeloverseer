@@ -4,8 +4,9 @@ module Sos.Exception
 
 import Sos.Utils
 
+import Control.Exception (Exception)
 import Data.ByteString (ByteString)
-
+import Data.Typeable (Typeable)
 
 data SosException
   -- Error compiling the given regex.
@@ -20,7 +21,7 @@ data SosException
       [Either Int ByteString] -- template
       [ByteString]            -- captured variables
       String                  -- string reason for failure
-  deriving Eq
+  deriving (Eq, Typeable)
 
 instance Show SosException where
   show (SosRegexException pattrn err) =
@@ -35,3 +36,5 @@ instance Show SosException where
       (\case
         Left n   -> '\\' : show n
         Right bs -> unpackBS bs)
+
+instance Exception SosException

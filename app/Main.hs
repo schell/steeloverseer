@@ -1,27 +1,34 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Main where
 
-import Sos
+import Sos.FileEvent
+import Sos.Job
+import Sos.Rule
+import Sos.Template
 import Sos.Utils
 
-import qualified System.FSNotify.Streaming as FSNotify
-
 import Control.Concurrent.Async
+import Control.Monad.STM
+import Control.Concurrent.STM.TMVar
+import Control.Concurrent.STM.TQueue.Extra
+import Control.Exception
 import Control.Monad
-import Control.Monad.Except
-import Data.ByteString        (ByteString)
-import Data.List.NonEmpty     (NonEmpty(..))
+import Control.Monad.Managed
+import Data.ByteString (ByteString)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid
-import Data.Yaml              (decodeFileEither, prettyPrintParseException)
+import Data.Yaml (decodeFileEither, prettyPrintParseException)
 import Options.Applicative
 import Streaming
 import System.Directory
 import System.Exit
 import System.FilePath
-import System.IO
+import Text.Printf (printf)
+import Text.Regex.TDFA (match)
 
-import qualified Data.Foldable     as Foldable
 import qualified Streaming.Prelude as S
-
+import qualified System.FSNotify.Streaming as FSNotify
 
 version :: String
 version = "Steel Overseer 2.0.1.0"
@@ -32,6 +39,12 @@ data Options = Options
   , optCommands :: [RawTemplate]
   , optPatterns :: [RawPattern]
   } deriving Show
+
+-- The concurrent sources of input to the main worker thread.
+data Input
+  = JobToEnqueue Job
+  | JobToRun Job
+  | JobResult Job (Maybe SomeException)
 
 main :: IO ()
 main = execParser opts >>= main'
@@ -79,7 +92,7 @@ main' Options{..} = do
             -- specified on the command line, default to ".*"
             ([], []) -> [".*"]
             _ -> optPatterns
-    runSos (mapM (`buildRule` optCommands) patterns)
+    mapM (`buildRule` optCommands) patterns
 
   (target, rules) <- do
     is_dir  <- doesDirectoryExist optTarget
@@ -89,7 +102,7 @@ main' Options{..} = do
       -- If the target is a single file, completely ignore the .sosrc
       -- commands and the cli commands.
       (_, True) -> do
-        rule <- runSos (buildRule (packBS optTarget) optCommands)
+        rule <- buildRule (packBS optTarget) optCommands
         pure (takeDirectory optTarget, [rule])
       _ -> do
         putStrLn ("Target " ++ optTarget ++ " is not a file or directory.")
@@ -97,54 +110,115 @@ main' Options{..} = do
 
   putStrLn "Hit Ctrl+C to quit."
 
-  job_queue <- newJobQueue
+  all_job_events :: TQueue Job <- newTQueueIO
 
-  let enqueue_thread :: IO a
+  let event_stream :: Stream (Of FileEvent) Managed ()
+      event_stream = watchTree target
+
+      job_stream :: Stream (Of Job) Managed ()
+      job_stream =
+        S.for event_stream
+          (\event ->
+            liftIO (eventCommands rules event) >>= \case
+              [] -> pure ()
+              (c:cs) -> S.yield (Job event (c :| cs)))
+
+      enqueue_thread :: Managed ()
       enqueue_thread =
-        runSos (sosEnqueueJobs rules (watchTree target) job_queue)
+        S.mapM_ (liftIO . atomically . writeTQueue all_job_events) job_stream
 
       -- Run jobs forever, only stopping to prompt whether or not to run
       -- enqueued jobs when a job fails. This way, the failing job's output
       -- will not be lost by subsequent jobs' outputs without the user's
       -- consent.
       dequeue_thread :: IO a
-      dequeue_thread = forever $ do
-        dequeueJob job_queue >>= \case
-          JobSuccess -> pure ()
-          JobFailure -> do
-            jobQueueLength job_queue >>= \case
-              0 -> pure ()
-              n -> do
-                putStrLn (yellow (show n ++ " job(s) still pending."))
+      dequeue_thread = do
+        -- Keep track of the subset of all job events to actually run. We don't
+        -- want to enqueue already-enqueued jobs, for example - once is enough.
+        jobs_to_run :: TQueue Job <- newTQueueIO
 
-                hSetBuffering stdin NoBuffering
-                continue <- fix (\prompt -> do
-                  putStr (yellow "Press 'c' to continue, 'p' to print, or 'a' to abort: ")
-                  hFlush stdout
-                  (getChar <* putStrLn "") >>= \case
-                    'c' -> pure True
-                    'a' -> pure False
-                    'p' -> do
-                      jobs <- jobQueueJobs job_queue
-                      Foldable.forM_ (jobCommands <$> jobs) $
-                        (\(c:|cs) -> do
-                          putStrLn ("- " ++ c)
-                          mapM_ (putStrLn . ("  " ++)) cs)
-                      prompt
-                    _ -> prompt)
-                hSetBuffering stdin LineBuffering
+        -- The second concurrent source of input: the result of the currently-
+        -- running job, if any.
+        running_job :: TMVar (Job, Async ()) <- newEmptyTMVarIO
 
-                unless continue $ do
-                  n' <- jobQueueLength job_queue
-                  clearJobQueue job_queue
-                  putStrLn (red ("Aborted " ++ show n' ++ " job(s)."))
+        let runJobAsync :: Job -> IO ()
+            runJobAsync job = do
+              putStrLn ("\n" <> cyan (showFileEvent (jobEvent job)))
+              a <- async (runJob job)
+              atomically (putTMVar running_job (job, a))
 
-  race_ enqueue_thread dequeue_thread
+        forever $ do
+          let input1 :: STM Input
+              input1 = JobToEnqueue <$> readTQueue all_job_events
 
-watchTree
-  :: forall m a.
-     MonadResource m
-  => FilePath -> Stream (Of FileEvent) m a
+              input2 :: STM Input
+              input2 = do
+                (job, a) <- takeTMVar running_job
+                result <- waitCatchSTM a
+                pure (JobResult job (either Just (const Nothing) result))
+
+              input3 :: STM Input
+              input3 =
+                isEmptyTMVar running_job >>= \case
+                  True -> JobToRun <$> readTQueue jobs_to_run
+                  False -> retry
+
+          atomically (input1 <|> input2 <|> input3) >>= \case
+            -- A job event occurred. If it's equal to the running job, cancel it
+            -- (it will be restarted when we process its ThreadKilled result).
+            -- Otherwise, enqueue it if it doesn't already exist.
+            JobToEnqueue job ->
+              atomically (tryReadTMVar running_job) >>= \case
+                Just (job', a) | job == job' -> do
+                  -- Slightly hacky here: replace the existing job with the new
+                  -- one, because although they contain the same commands, when
+                  -- we restart the job, we want to print the newer 'FileEvent',
+                  -- which may be different.
+                  _ <- atomically (swapTMVar running_job (job, a))
+                  cancel a
+                _ ->
+                  atomically $
+                    elemTQueue jobs_to_run job >>= \case
+                      True -> pure ()
+                      False -> writeTQueue jobs_to_run job
+
+            JobResult job (Just ex) -> do
+              case fromException ex of
+                -- The currently-running job died via ThreadKilled. We will
+                -- assume we 'canceled' it to restart it.
+                Just ThreadKilled -> runJobAsync job
+
+                -- The currently-running job died via some other means. We don't
+                -- want the output to get lost, so we'll just empty the job
+                -- queue for simplicity.
+                _ -> do
+                  putStrLn (prettyPrintException ex)
+
+                  let exhaustJobsToRun :: STM ()
+                      exhaustJobsToRun =
+                        tryReadTQueue jobs_to_run >>= \case
+                          Nothing -> pure ()
+                          Just _ -> exhaustJobsToRun
+
+                  atomically exhaustJobsToRun
+
+            -- Job ended successfully!
+            JobResult _ Nothing -> pure ()
+
+            JobToRun job -> runJobAsync job
+
+  race_ (runManaged enqueue_thread) dequeue_thread
+
+eventCommands :: [Rule] -> FileEvent -> IO [ShellCommand]
+eventCommands rules event = concat <$> mapM go rules
+ where
+  go :: Rule -> IO [ShellCommand]
+  go rule =
+    case match (ruleRegex rule) (fileEventPath event) of
+      []     -> pure []
+      (xs:_) -> mapM (instantiateTemplate xs) (ruleTemplates rule)
+
+watchTree :: forall a. FilePath -> Stream (Of FileEvent) Managed a
 watchTree target = do
   cwd <- liftIO getCurrentDirectory
 
@@ -152,7 +226,7 @@ watchTree target = do
       config = FSNotify.defaultConfig
         { FSNotify.confDebounce = FSNotify.Debounce 0.1 }
 
-      stream :: Stream (Of FSNotify.Event) m a
+      stream :: Stream (Of FSNotify.Event) Managed a
       stream = FSNotify.watchTree config target (const True)
 
   S.for stream (\case
@@ -162,6 +236,13 @@ watchTree target = do
  where
   go :: FilePath -> FilePath -> ByteString
   go cwd path = packBS (makeRelative cwd path)
+
+prettyPrintException :: SomeException -> String
+prettyPrintException ex =
+  case fromException ex of
+    Just ExitSuccess -> red (printf "Failure ✗ (0)")
+    Just (ExitFailure code) -> red (printf "Failure ✗ (%d)" code)
+    Nothing -> red (show ex)
 
 --------------------------------------------------------------------------------
 
@@ -173,12 +254,20 @@ parseSosrc sosrc = do
     then
       decodeFileEither sosrc >>= \case
         Left err -> do
-          putStrLn ("Error parsing " ++ show sosrc ++ ":\n" ++ prettyPrintParseException err)
+          putStrLn ("Error parsing " ++ show sosrc ++ ":\n" ++
+            prettyPrintParseException err)
           exitFailure
         Right (raw_rules :: [RawRule]) -> do
-          rules <- runSos (mapM buildRawRule raw_rules)
+          rules <- mapM buildRawRule raw_rules
           putStrLn (case length raw_rules of
                       1 -> "Found 1 rule in " ++ show sosrc
                       n -> "Found " ++ show n ++ " rules in " ++ show sosrc)
           pure (concat rules)
     else pure []
+
+--------------------------------------------------------------------------------
+-- Orphan instances
+
+instance MonadThrow Managed where
+  throwM :: Exception e => e -> Managed a
+  throwM e = managed (\_ -> throwM e)

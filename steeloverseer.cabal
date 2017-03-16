@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.14.0.
+-- This file has been generated from package.yaml by hpack version 0.17.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -27,53 +27,54 @@ source-repository head
 
 library
     exposed-modules:
-          Sos
+          Control.Concurrent.STM.TQueue.Extra
           Sos.Exception
           Sos.FileEvent
           Sos.Job
-          Sos.JobQueue
           Sos.Rule
           Sos.Template
           Sos.Utils
           System.FSNotify.Streaming
     default-language: Haskell2010
     build-depends:
-          async      >= 2.0
-        , base       >= 4.0 && < 5.0
+          async >= 2.0
+        , base >= 4.0 && < 5.0
         , bytestring >= 0.10
-        , fsnotify   >= 0.2
-        , mtl        >= 2.2
+        , exceptions
+        , fsnotify >= 0.2
+        , managed >= 1.0.1
+        , mtl >= 2.2
         , regex-tdfa >= 1.2
-        , resourcet  >= 1.0
         , semigroups >= 0.16
-        , stm        >= 2.4
-        , streaming  >= 0.1.0 && < 0.1.5
-        , text       >= 1.2
-        , yaml       >= 0.8
+        , stm >= 2.4
+        , streaming >= 0.1.0 && < 0.1.5
+        , text >= 1.2
+        , yaml >= 0.8
         , aeson         >= 0.8
         , ansi-terminal >= 0.6.2
         , containers    >= 0.5
         , process       >= 1.2
     hs-source-dirs:
           src
-    default-extensions: BangPatterns DeriveFunctor FlexibleContexts LambdaCase OverloadedStrings RecordWildCards ScopedTypeVariables ViewPatterns
+    default-extensions: BangPatterns DeriveDataTypeable DeriveFunctor FlexibleContexts InstanceSigs LambdaCase OverloadedStrings RecordWildCards ScopedTypeVariables ViewPatterns
     ghc-options: -Wall
 
 executable sos
     main-is: Main.hs
     build-depends:
-          async      >= 2.0
-        , base       >= 4.0 && < 5.0
+          async >= 2.0
+        , base >= 4.0 && < 5.0
         , bytestring >= 0.10
-        , fsnotify   >= 0.2
-        , mtl        >= 2.2
+        , exceptions
+        , fsnotify >= 0.2
+        , managed >= 1.0.1
+        , mtl >= 2.2
         , regex-tdfa >= 1.2
-        , resourcet  >= 1.0
         , semigroups >= 0.16
-        , stm        >= 2.4
-        , streaming  >= 0.1.0 && < 0.1.5
-        , text       >= 1.2
-        , yaml       >= 0.8
+        , stm >= 2.4
+        , streaming >= 0.1.0 && < 0.1.5
+        , text >= 1.2
+        , yaml >= 0.8
         , steeloverseer
         , directory >= 1.2
         , filepath >= 1.3
@@ -84,7 +85,7 @@ executable sos
     default-language: Haskell2010
     hs-source-dirs:
           app
-    default-extensions: BangPatterns DeriveFunctor FlexibleContexts LambdaCase OverloadedStrings RecordWildCards ScopedTypeVariables ViewPatterns
+    default-extensions: BangPatterns DeriveDataTypeable DeriveFunctor FlexibleContexts InstanceSigs LambdaCase OverloadedStrings RecordWildCards ScopedTypeVariables ViewPatterns
     ghc-options: -Wall -threaded
 
 test-suite spec
@@ -92,24 +93,24 @@ test-suite spec
     main-is: Spec.hs
     hs-source-dirs:
           test
-    default-extensions: BangPatterns DeriveFunctor FlexibleContexts LambdaCase OverloadedStrings RecordWildCards ScopedTypeVariables ViewPatterns
+    default-extensions: BangPatterns DeriveDataTypeable DeriveFunctor FlexibleContexts InstanceSigs LambdaCase OverloadedStrings RecordWildCards ScopedTypeVariables ViewPatterns
     ghc-options: -Wall
     build-depends:
-          async      >= 2.0
-        , base       >= 4.0 && < 5.0
+          async >= 2.0
+        , base >= 4.0 && < 5.0
         , bytestring >= 0.10
-        , fsnotify   >= 0.2
-        , mtl        >= 2.2
+        , exceptions
+        , fsnotify >= 0.2
+        , managed >= 1.0.1
+        , mtl >= 2.2
         , regex-tdfa >= 1.2
-        , resourcet  >= 1.0
         , semigroups >= 0.16
-        , stm        >= 2.4
-        , streaming  >= 0.1.0 && < 0.1.5
-        , text       >= 1.2
-        , yaml       >= 0.8
+        , stm >= 2.4
+        , streaming >= 0.1.0 && < 0.1.5
+        , text >= 1.2
+        , yaml >= 0.8
         , steeloverseer
         , hspec
     other-modules:
-          Sos.JobQueueSpec
           Sos.TemplateSpec
     default-language: Haskell2010

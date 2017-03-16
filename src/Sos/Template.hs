@@ -6,17 +6,17 @@ module Sos.Template
   ) where
 
 import Sos.Exception
-import Sos.Job       (ShellCommand)
+import Sos.Job (ShellCommand)
 import Sos.Utils
 
 import Control.Applicative
-import Control.Monad.Except
-import Data.ByteString              (ByteString)
+import Control.Monad.Catch (MonadThrow, throwM)
+import Data.ByteString (ByteString)
 import Data.Monoid
 import Text.ParserCombinators.ReadP
 
-import qualified Data.Text.Encoding     as Text
-import qualified Data.Text.Lazy         as LText
+import qualified Data.Text.Encoding as Text
+import qualified Data.Text.Lazy as LText
 import qualified Data.Text.Lazy.Builder as LText
 
 
@@ -38,11 +38,11 @@ type RawTemplate = ByteString
 type Template = [Either Int ByteString]
 
 
-parseTemplate :: MonadError SosException m => RawTemplate -> m Template
+parseTemplate :: MonadThrow m => RawTemplate -> m Template
 parseTemplate raw_template =
   case readP_to_S parser (unpackBS raw_template) of
     [(template, "")] -> return template
-    _ -> throwError (SosCommandParseException raw_template)
+    _ -> throwM (SosCommandParseException raw_template)
  where
   parser :: ReadP Template
   parser = some (capturePart <|||> textPart) <* eof
@@ -63,10 +63,7 @@ parseTemplate raw_template =
 --    instantiateTemplate ["ONE", "TWO"] [Right "foo", Left 0, Right "bar", Left 1] == "fooONEbarTWO"
 --
 instantiateTemplate
-  :: forall m. MonadError SosException m
-  => [ByteString]
-  -> Template
-  -> m ShellCommand
+  :: forall m. MonadThrow m => [ByteString] -> Template -> m ShellCommand
 instantiateTemplate vars0 template0 = go 0 vars0 template0
  where
   go :: Int -> [ByteString] -> Template -> m ShellCommand
@@ -74,7 +71,7 @@ instantiateTemplate vars0 template0 = go 0 vars0 template0
     case flattenTemplate template of
       Left n ->
         let err = "uninstantiated template variable: \\" ++ show n
-        in throwError (SosCommandApplyException template0 vars0 err)
+        in throwM (SosCommandApplyException template0 vars0 err)
       Right x -> return x
   go n (t:ts) template = go (n+1) ts (map f template)
    where
