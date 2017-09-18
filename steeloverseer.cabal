@@ -1,9 +1,9 @@
--- This file has been generated from package.yaml by hpack version 0.17.0.
+-- This file has been generated from package.yaml by hpack version 0.17.1.
 --
 -- see: https://github.com/sol/hpack
 
 name:           steeloverseer
-version:        2.0.1.0
+version:        2.0.2
 cabal-version:  >= 1.10
 build-type:     Simple
 license:        BSD3

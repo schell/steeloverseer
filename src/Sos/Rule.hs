@@ -13,11 +13,14 @@ import Control.Applicative
 import Control.Monad.Catch (MonadThrow, throwM)
 import Data.Aeson.Types
 import Data.ByteString (ByteString)
+import Data.ByteString.Internal (c2w)
 import Data.Either
+import Data.Foldable (asum)
 import Data.Text (Text)
 import Text.Regex.TDFA
 import Text.Regex.TDFA.ByteString (compile)
 
+import qualified Data.ByteString as ByteString (intercalate, singleton)
 import qualified Data.Text.Encoding as Text
 
 
@@ -25,11 +28,12 @@ import qualified Data.Text.Encoding as Text
 type RawPattern = ByteString
 
 
--- A Rule is a regex paired with a list of templates to execute on files
--- that match the regex. Any mismatching of captured variables with the
--- associated templates will be caught at runtime.
+-- A Rule is a pattern to match, optional pattern to exclude, and a list of
+-- templates to execute on files that match the regex.
 --
--- For example, this definition from a .sosrc yaml file is incorrect:
+-- Any mismatching of captured variables with the associated templates will be
+-- caught at runtime. For example, this definition from a .sosrc yaml file is
+-- incorrect:
 --
 --     - pattern: .*.c
 --     - commands:
@@ -38,59 +42,89 @@ type RawPattern = ByteString
 -- because there is only one capture variable, and it has with index 0.
 --
 data Rule = Rule
-  { ruleRegex     :: Regex      -- Compiled regex of command pattern.
-  , ruleTemplates :: [Template] -- Command template.
+  { rulePattern   :: Regex       -- Compiled regex of file pattern.
+  , ruleExclude   :: Maybe Regex -- Compiled regex of file patterns to exclude.
+  , ruleTemplates :: [Template]  -- Command template.
   }
 
--- Build a 'Rule' from a 'RawPattern' and a list of 'RawTemplate' by compiling
--- the pattern regex and parsing each template.
-buildRule :: MonadThrow m => RawPattern -> [RawTemplate] -> m Rule
-buildRule pattrn templates0 = do
+-- Build a 'Rule' from a 'RawPattern', a list of 'RawPattern' (patterns to
+-- exclude), and a list of 'RawTemplate' by:
+--
+-- - Compiling the pattern regex
+-- - Compiling the exclude regexes combined with ||
+-- - Parsing each template.
+--
+buildRule
+  :: forall m.
+     MonadThrow m
+  => RawPattern -> [RawPattern] -> [RawTemplate] -> m Rule
+buildRule pattrn excludes templates0 = do
   templates <- mapM parseTemplate templates0
 
-  -- Improve performance for patterns with no capture groups.
-  let (comp_opt, exec_opt) =
-        case concatMap lefts templates of
-          [] -> ( CompOption
-                    { caseSensitive  = True
-                    , multiline      = False
-                    , rightAssoc     = True
-                    , newSyntax      = True
-                    , lastStarGreedy = True
-                    }
-                , ExecOption
-                    { captureGroups = False }
-                )
-          _ -> (defaultCompOpt, defaultExecOpt)
-
   regex <-
-    case compile comp_opt exec_opt pattrn of
-      Left err -> throwM (SosRegexException pattrn err)
-      Right x  -> return x
+    -- Improve performance for patterns with no capture groups.
+    case concatMap lefts templates of
+      [] ->
+        compileRegex
+          (CompOption
+            { caseSensitive  = True
+            , multiline      = False
+            , rightAssoc     = True
+            , newSyntax      = True
+            , lastStarGreedy = True
+            })
+          (ExecOption
+            { captureGroups = False })
+          pattrn
+      _ -> compileRegex defaultCompOpt defaultExecOpt pattrn
 
-  return (Rule regex templates)
+  case excludes of
+    [] ->
+      pure (Rule
+        { rulePattern = regex
+        , ruleExclude = Nothing
+        , ruleTemplates = templates
+        })
+    _ -> do
+      exclude <-
+        compileRegex defaultCompOpt defaultExecOpt
+          (ByteString.intercalate (ByteString.singleton (c2w '|')) excludes)
+      pure (Rule
+        { rulePattern = regex
+        , ruleExclude = Just exclude
+        , ruleTemplates = templates
+        })
+ where
+  compileRegex :: CompOption -> ExecOption -> RawPattern -> m Regex
+  compileRegex co eo patt =
+    case compile co eo patt of
+      Left err -> throwM (SosRegexException patt err)
+      Right x -> pure x
 
 -- A "raw" Rule that is post-processed after being parsed from a yaml
--- file. Namely, the regex is compiled and the commands are parsed into
--- templates.
-data RawRule = RawRule [RawPattern] [RawTemplate]
+-- file.
+data RawRule = RawRule [RawPattern] [RawPattern] [RawTemplate]
 
 instance FromJSON RawRule where
-  parseJSON (Object o) = RawRule <$> parsePatterns <*> parseCommands
+  parseJSON (Object o) =
+    RawRule <$> parsePatterns <*> parseExcludes <*> parseCommands
    where
     parsePatterns :: Parser [RawPattern]
-    parsePatterns = fmap go (o .: "pattern" <|> o .: "patterns")
+    parsePatterns = go ["pattern", "patterns"]
+
+    parseExcludes :: Parser [RawPattern]
+    parseExcludes = go ["exclude", "excludes", "excluding"] <|> pure []
 
     parseCommands :: Parser [RawTemplate]
-    parseCommands = fmap go (o .: "command" <|> o .: "commands")
+    parseCommands = go ["command", "commands"]
 
-    go :: OneOrList Text -> [ByteString]
-    go = map Text.encodeUtf8 . listify
+    go :: [Text] -> Parser [ByteString]
+    go = fmap (map Text.encodeUtf8 . listify) . asum . map (o .:)
   parseJSON v = typeMismatch "command" v
 
 buildRawRule :: MonadThrow m => RawRule -> m [Rule]
-buildRawRule (RawRule patterns templates) =
-  mapM (\pattrn -> buildRule pattrn templates) patterns
+buildRawRule (RawRule patterns excludes templates) =
+  mapM (\pattrn -> buildRule pattrn excludes templates) patterns
 
 --------------------------------------------------------------------------------
 

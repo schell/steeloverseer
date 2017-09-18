@@ -31,13 +31,14 @@ import qualified Streaming.Prelude as S
 import qualified System.FSNotify.Streaming as FSNotify
 
 version :: String
-version = "Steel Overseer 2.0.1.0"
+version = "Steel Overseer 2.0.2"
 
 data Options = Options
   { optTarget   :: FilePath
   , optRCFile   :: FilePath
   , optCommands :: [RawTemplate]
   , optPatterns :: [RawPattern]
+  , optExcludes :: [RawPattern]
   } deriving Show
 
 -- The concurrent sources of input to the main worker thread.
@@ -76,6 +77,11 @@ main = execParser opts >>= main'
         <> short 'p'
         <> help "Add pattern to match on file path. Only relevant if the target is a directory. (default: .*)"
         <> metavar "PATTERN" )))
+    <*> many (fmap packBS (strOption
+      ( long "exclude"
+        <> short 'e'
+        <> help "Add pattern to exclude matches on file path. Only relevant if the target is a directory."
+        <> metavar "PATTERN" )))
 
 main' :: Options -> IO ()
 main' Options{..} = do
@@ -85,14 +91,15 @@ main' Options{..} = do
   -- Parse cli rules, where one rule is created per pattern that executes
   -- each of @optCommands@ sequentially.
   cli_rules <- do
-    let patterns :: [RawPattern]
-        patterns =
+    let patterns, excludes :: [RawPattern]
+        (patterns, excludes) =
           case (rc_rules, optPatterns) of
             -- If there are no commands in .sosrc, and no patterns
             -- specified on the command line, default to ".*"
-            ([], []) -> [".*"]
-            _ -> optPatterns
-    mapM (`buildRule` optCommands) patterns
+            ([], []) -> ([".*"], [])
+            _ -> (optPatterns, optExcludes)
+
+    mapM (\pattrn -> buildRule pattrn excludes optCommands) patterns
 
   (target, rules) <- do
     is_dir  <- doesDirectoryExist optTarget
@@ -100,9 +107,9 @@ main' Options{..} = do
     case (is_dir, is_file) of
       (True, _) -> pure (optTarget, cli_rules ++ rc_rules)
       -- If the target is a single file, completely ignore the .sosrc
-      -- commands and the cli commands.
+      -- commands.
       (_, True) -> do
-        rule <- buildRule (packBS optTarget) optCommands
+        rule <- buildRule (packBS optTarget) [] optCommands
         pure (takeDirectory optTarget, [rule])
       _ -> do
         putStrLn ("Target " ++ optTarget ++ " is not a file or directory.")
@@ -214,9 +221,26 @@ eventCommands rules event = concat <$> mapM go rules
  where
   go :: Rule -> IO [ShellCommand]
   go rule =
-    case match (ruleRegex rule) (fileEventPath event) of
-      []     -> pure []
-      (xs:_) -> mapM (instantiateTemplate xs) (ruleTemplates rule)
+    case (patternMatch, excludeMatch) of
+      -- Pattern doesn't match
+      ([], _) -> pure []
+      -- Pattern matches, but so does exclude pattern
+      (_, True) -> pure []
+      -- Pattern matches, and exclude pattern doesn't!
+      (xs, False) -> mapM (instantiateTemplate xs) (ruleTemplates rule)
+
+   where
+    patternMatch :: [ByteString]
+    patternMatch =
+      case match (rulePattern rule) (fileEventPath event) of
+        [] -> []
+        xs:_ -> xs
+
+    excludeMatch :: Bool
+    excludeMatch =
+      case ruleExclude rule of
+        Nothing -> False
+        Just exclude -> match exclude (fileEventPath event)
 
 watchTree :: forall a. FilePath -> Stream (Of FileEvent) Managed a
 watchTree target = do

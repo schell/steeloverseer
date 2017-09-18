@@ -20,9 +20,10 @@ Usage
 
 See `sos --help` to get started:
 
-    Steel Overseer 2.0.1
+    Steel Overseer 2.0.2
 
     Usage: sos [TARGET] [--rcfile ARG] [-c|--command COMMAND] [-p|--pattern PATTERN]
+               [-e|--exclude PATTERN]
       A file watcher and development tool.
 
     Available options:
@@ -34,16 +35,20 @@ See `sos --help` to get started:
       -c,--command COMMAND     Add command to run on file event.
       -p,--pattern PATTERN     Add pattern to match on file path. Only relevant if
                                the target is a directory. (default: .*)
+      -e,--exclude PATTERN     Add pattern to exclude matches on file path. Only
+                               relevant if the target is a directory.
+
 
 Patterns and Commands
 -------------------
 Capture groups can be created with `(` `)` and captured variables can be
 referred to with `\1`, `\2`, etc. (`\0` contains the entire match).
 
-For example, for each change to a `.c` file in `src/`, we may want to compile
-the file and run its corresponding unit test:
+For example, for each change to a `.c` file in `src/` (excluding files
+containing `"_test"`), we may want to compile the file and run its corresponding
+unit test:
 
-    sos src/ -c "gcc -c \0 -o obj/\1.o" -c "make test --filter=test/\1_test.c" -p "src/(.*)\.c"
+    sos src/ -c "gcc -c \0 -o obj/\1.o" -c "make test --filter=test/\1_test.c" -p "src/(.*)\.c" -e "_test"
 
 Commands are run left-to-right, and one failed command will halt the entire pipeline.
 
@@ -54,6 +59,7 @@ which is an alternative to the command-line interface (yaml syntax):
 
 ```yaml
 - pattern: src/(.*)\.c
+  exclude: _test
   commands:
   - gcc -c \0 -o obj/\1.o
   - make test --filter=test/\1_test.c
@@ -72,9 +78,14 @@ line like so:
 ### Grammar
 
     sosrc            := [entry]
-    entry            := { "pattern" | "patterns" : value | [value]
-                        , "command" | "commands" : value | [value]
+    entry            := {
+                          pattern_entry,
+                          exclude_entry?, -- Note: optional!
+                          command_entry
                         }
+    pattern_entry    := "pattern" | "patterns" : value | [value]
+    exclude_entry    := "exclude" | "excludes" | "excluding" : value | [value]
+    command_entry    := "command" | "commands" : value | [value]
     value            := [segment]
     segment          := text_segment | var_segment
     text_segment     := string
