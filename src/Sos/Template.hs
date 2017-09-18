@@ -41,7 +41,7 @@ type Template = [Either Int ByteString]
 parseTemplate :: MonadThrow m => RawTemplate -> m Template
 parseTemplate raw_template =
   case readP_to_S parser (unpackBS raw_template) of
-    [(template, "")] -> return template
+    [(template, "")] -> pure template
     _ -> throwM (SosCommandParseException raw_template)
  where
   parser :: ReadP Template
@@ -72,7 +72,7 @@ instantiateTemplate vars0 template0 = go 0 vars0 template0
       Left n ->
         let err = "uninstantiated template variable: \\" ++ show n
         in throwM (SosCommandApplyException template0 vars0 err)
-      Right x -> return x
+      Right x -> pure x
   go n (t:ts) template = go (n+1) ts (map f template)
    where
     f :: Either Int ByteString -> Either Int ByteString
