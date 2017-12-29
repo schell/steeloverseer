@@ -1,4 +1,4 @@
-{-# language CPP #-}
+{-# LANGUAGE CPP #-}
 
 module Sos.Job
   ( Job(..)
@@ -9,7 +9,6 @@ module Sos.Job
 import Sos.FileEvent
 import Sos.Utils
 
-import Control.Applicative
 import Control.Concurrent.MVar (readMVar)
 import Control.Exception
 import Data.Function (on)

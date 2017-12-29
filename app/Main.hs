@@ -9,6 +9,7 @@ import Sos.Template
 import Sos.Utils
 
 import Control.Concurrent.Async
+import Control.Monad.Catch (MonadThrow(..))
 import Control.Monad.STM
 import Control.Concurrent.STM.TMVar
 import Control.Concurrent.STM.TQueue.Extra

@@ -2,7 +2,7 @@ name: steeloverseer
 version: '2.0.2'
 license: BSD3
 license-file: LICENSE
-maintainer: schell.scivally@synapsegrop.com
+maintainer: schell@takt.com
 stability: stable
 github: schell/steeloverseer
 synopsis: A file watcher and development tool.
@@ -43,7 +43,7 @@ dependencies:
   - regex-tdfa >= 1.2
   - semigroups >= 0.16
   - stm >= 2.4
-  - streaming >= 0.1.0 && < 0.1.5
+  - streaming >= 0.1.0 && < 0.3
   - text >= 1.2
   - yaml >= 0.8
 
