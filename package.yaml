@@ -53,7 +53,7 @@ library:
     - aeson         >= 0.8
     - ansi-terminal >= 0.6.2
     - containers    >= 0.5
-    - process       >= 1.6.0 && < 1.6.1
+    - process       >= 1.6 && < 1.7
     - unix
 
 executables:

@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 155efa74eb44fc173aedba28803b3b25b786305899c0612521641e4fa1474fa2
+-- hash: d59cfc447a3deca89e1cde472d8e06030ab3d02fbcddd28cff90f1157f2971f1
 
 name:           steeloverseer
 version:        2.0.2
@@ -51,7 +51,7 @@ library
         , fsnotify >=0.2
         , managed >=1.0.1
         , mtl >=2.2
-        , process >=1.6.0 && <1.6.1
+        , process >=1.6 && <1.7
         , regex-tdfa >=1.2
         , semigroups >=0.16
         , stm >=2.4
