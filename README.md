@@ -3,6 +3,10 @@ Steel Overseer
 
 A file watcher and development tool, similar to Ruby's [Guard](https://github.com/guard/guard).
 
+The main idea is that you have steeloverseer watch your files and then execute a series of shell 
+commands in response. The first command to fail short circuits the series. The watched files can 
+be selected using regular expressions and the commands may include capture groups.
+
 [![Build Status](https://travis-ci.org/steeloverseer/steeloverseer.png?branch=master)](https://travis-ci.org/steeloverseer/steeloverseer)
 
 Installation
