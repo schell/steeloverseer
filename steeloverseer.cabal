@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d59cfc447a3deca89e1cde472d8e06030ab3d02fbcddd28cff90f1157f2971f1
+-- hash: e0468a343c9d01e573c139ad9fedc221aecdc503cfb35a1e36094f14f2b4e93c
 
 name:           steeloverseer
-version:        2.0.2
+version:        2.0.2.0
 cabal-version:  >= 1.10
 build-type:     Simple
 license:        BSD3
