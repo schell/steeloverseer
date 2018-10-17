@@ -255,9 +255,9 @@ watchTree target = do
       stream = FSNotify.watchTree config target (const True)
 
   S.for stream (\case
-    FSNotify.Added    path _ -> S.yield (FileAdded    (go cwd path))
-    FSNotify.Modified path _ -> S.yield (FileModified (go cwd path))
-    FSNotify.Removed  _    _ -> pure ())
+    FSNotify.Added    path _ _ -> S.yield (FileAdded    (go cwd path))
+    FSNotify.Modified path _ _ -> S.yield (FileModified (go cwd path))
+    FSNotify.Removed  _    _ _ -> pure ())
  where
   go :: FilePath -> FilePath -> ByteString
   go cwd path = packBS (makeRelative cwd path)

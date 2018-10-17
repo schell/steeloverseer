@@ -1,5 +1,5 @@
 name: steeloverseer
-version: 2.0.2.0
+version: 2.1.0.0
 license: BSD3
 license-file: LICENSE
 maintainer: schell@takt.com
@@ -37,7 +37,7 @@ dependencies:
   - base >= 4.0 && < 5.0
   - bytestring >= 0.10
   - exceptions
-  - fsnotify >= 0.2
+  - fsnotify >= 0.3
   - managed >= 1.0.1
   - mtl >= 2.2
   - regex-tdfa >= 1.2
