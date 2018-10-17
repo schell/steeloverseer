@@ -10,3 +10,4 @@ cabal.sandbox.config
 .stack-work/
 .sosrc*
 codex.tags
+steeloverseer.cabal

@@ -1,7 +1,6 @@
 module Sos.Utils where
 
 import Control.Applicative
-import Data.Monoid
 import Data.ByteString     (ByteString)
 import System.Console.ANSI
 

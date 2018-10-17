@@ -18,7 +18,6 @@ import Control.Monad
 import Control.Monad.Managed
 import Data.ByteString (ByteString)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid
 import Data.Yaml (decodeFileEither, prettyPrintParseException)
 import Options.Applicative
 import Streaming
@@ -254,10 +253,10 @@ watchTree target = do
       stream :: Stream (Of FSNotify.Event) Managed a
       stream = FSNotify.watchTree config target (const True)
 
-  S.for stream (\case
+  S.for stream $ \case
     FSNotify.Added    path _ _ -> S.yield (FileAdded    (go cwd path))
     FSNotify.Modified path _ _ -> S.yield (FileModified (go cwd path))
-    FSNotify.Removed  _    _ _ -> pure ())
+    _                          -> pure ()
  where
   go :: FilePath -> FilePath -> ByteString
   go cwd path = packBS (makeRelative cwd path)

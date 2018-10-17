@@ -12,7 +12,6 @@ import Sos.Utils
 import Control.Applicative
 import Control.Monad.Catch (MonadThrow, throwM)
 import Data.ByteString (ByteString)
-import Data.Monoid
 import Text.ParserCombinators.ReadP
 
 import qualified Data.Text.Encoding as Text
