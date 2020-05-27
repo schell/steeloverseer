@@ -13,6 +13,7 @@ import Control.Concurrent.MVar (readMVar)
 import Control.Concurrent.ParallelIO.Local
 import Control.Exception
 import Data.Function (on)
+import Data.List (find)
 import Data.List.NonEmpty (NonEmpty)
 import System.Exit
 import System.IO
@@ -62,7 +63,7 @@ runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
     flushStdin
 
     try (withPool 10 (`parallel` (runForegroundProcess . shell <$> cmd))) >>= \case
-      Left (ex :: SomeException) -> do
+      Left (ex :: SomeException) ->
         case fromException ex of
           Just ThreadKilled -> do
             putStrLn (yellow "Job interrupted ✗")
@@ -71,12 +72,14 @@ runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
             putStrLn (red (show ex))
             throwIO ex
 
-      Right ExitSuccess -> do
-        putStrLn (green "Success ✓")
-        go (n+1) cmds
-
-      Right (ExitFailure c) ->
-        throwIO (ExitFailure c)
+      Right exitCodes ->
+        case find (/= ExitSuccess) exitCodes of
+          Nothing -> do
+            putStrLn (green "Success ✓")
+            go (n+1) cmds
+          Just (ExitFailure c) ->
+            throwIO (ExitFailure c)
+          Just ExitSuccess -> undefined -- TODO: handle this in a better way
 
 #ifdef mingw32_HOST_OS
 
