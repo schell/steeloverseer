@@ -44,7 +44,7 @@ parseTemplates raw_template =
     _ -> throwM (SosCommandParseException raw_template)
  where
   parser :: ReadP [Template]
-  parser = sepBy parserSingle (packBS <$> string "||")
+  parser = sepBy1 parserSingle (packBS <$> string "||")
 
   parserSingle :: ReadP Template
   parserSingle = some (capturePart <|||> textPart) <* eof
