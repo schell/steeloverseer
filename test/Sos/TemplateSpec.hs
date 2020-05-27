@@ -9,13 +9,15 @@ spec :: Spec
 spec = do
   describe "parseTemplate" $ do
     it "fails on the empty string" $
-      parseTemplate "" `shouldThrow` anySosException
+      parseTemplates "" `shouldThrow` anySosException
 
     it "parses templates" $ do
-      parseTemplate "hi"      `shouldReturn` [Right "hi"]
-      parseTemplate "foo bar" `shouldReturn` [Right "foo bar"]
-      parseTemplate "\\25"    `shouldReturn` [Left 25]
-      parseTemplate "gcc \\0" `shouldReturn` [Right "gcc ", Left 0]
+      parseTemplates "hi"              `shouldReturn` [[Right "hi"]]
+      parseTemplates "foo bar"         `shouldReturn` [[Right "foo bar"]]
+      parseTemplates "\\25"            `shouldReturn` [[Left 25]]
+      parseTemplates "gcc \\0"         `shouldReturn` [[Right "gcc ", Left 0]]
+      parseTemplates "hi || there"     `shouldReturn` [[Right "hi"], [Right "there"]]
+      parseTemplates "\\25 || gcc \\0" `shouldReturn` [[Left 25], [Right "gcc", Left 0]]
 
   describe "instantiateTemplate" $ do
     it "ignores capture groups in templates with no captures" $ do
