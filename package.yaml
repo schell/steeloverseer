@@ -40,6 +40,7 @@ dependencies:
   - fsnotify >= 0.3
   - managed >= 1.0.1
   - mtl >= 2.2
+  - parallel-io >= 0.3.3
   - regex-tdfa >= 1.2
   - semigroups >= 0.16
   - stm >= 2.4

@@ -10,6 +10,7 @@ import Sos.FileEvent
 import Sos.Utils
 
 import Control.Concurrent.MVar (readMVar)
+import Control.Concurrent.ParallelIO.Local
 import Control.Exception
 import Data.Function (on)
 import Data.List.NonEmpty (NonEmpty)
@@ -47,10 +48,10 @@ instance Eq Job where
 runJob :: Job -> IO ()
 runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
  where
-  go :: Int -> [ShellCommand] -> IO ()
+  go :: Int -> [[ShellCommand]] -> IO ()
   go _ [] = pure ()
   go n (cmd:cmds) = do
-    putStrLn (magenta (printf "[%d/%d] " n (length cmds0)) <> cmd)
+    putStrLn (magenta (printf "[%d/%d] " n (length cmds0)) <> unwords cmd)
 
     let flushStdin :: IO ()
         flushStdin =
@@ -60,7 +61,7 @@ runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
 
     flushStdin
 
-    try (runForegroundProcess (shell cmd)) >>= \case
+    try (withPool 10 (`parallel` (runForegroundProcess . shell <$> cmd))) >>= \case
       Left (ex :: SomeException) -> do
         case fromException ex of
           Just ThreadKilled -> do
