@@ -33,8 +33,8 @@ type ShellCommand = String
 -- | A 'Job' is a list of shell commands to run, along with the 'FileEvent' that
 -- triggered the job.
 data Job = Job
-  { jobEvent    :: FileEvent             -- ^ Event that triggered this job.
-  , jobCommands :: NonEmpty ShellCommand -- ^ The list of shell commands to run.
+  { jobEvent    :: FileEvent               -- ^ Event that triggered this job.
+  , jobCommands :: NonEmpty [ShellCommand] -- ^ The list of lists of shell commands to run.
   }
 
 -- | Non-stanard Eq instance: Job equality compares only the shell commands it's
