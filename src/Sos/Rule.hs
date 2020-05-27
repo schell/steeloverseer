@@ -44,7 +44,7 @@ type RawPattern = ByteString
 data Rule = Rule
   { rulePattern   :: Regex       -- Compiled regex of file pattern.
   , ruleExclude   :: Maybe Regex -- Compiled regex of file patterns to exclude.
-  , ruleTemplates :: [Template]  -- Command template.
+  , ruleTemplates :: [[Template]]  -- Command template.
   }
 
 -- Build a 'Rule' from a 'RawPattern', a list of 'RawPattern' (patterns to
@@ -59,24 +59,24 @@ buildRule
      MonadThrow m
   => RawPattern -> [RawPattern] -> [RawTemplate] -> m Rule
 buildRule pattrn excludes templates0 = do
-  templates <- mapM parseTemplate templates0
+  templates :: [[Template]] <- mapM parseTemplates templates0
 
   regex <-
     -- Improve performance for patterns with no capture groups.
-    case concatMap lefts templates of
-      [] ->
-        compileRegex
-          (CompOption
-            { caseSensitive  = True
-            , multiline      = False
-            , rightAssoc     = True
-            , newSyntax      = True
-            , lastStarGreedy = True
-            })
-          (ExecOption
-            { captureGroups = False })
-          pattrn
-      _ -> compileRegex defaultCompOpt defaultExecOpt pattrn
+    if all null (concatMap lefts <$> templates)
+    then
+      compileRegex
+        (CompOption
+          { caseSensitive  = True
+          , multiline      = False
+          , rightAssoc     = True
+          , newSyntax      = True
+          , lastStarGreedy = True
+          })
+        (ExecOption
+          { captureGroups = False })
+        pattrn
+    else compileRegex defaultCompOpt defaultExecOpt pattrn
 
   case excludes of
     [] ->

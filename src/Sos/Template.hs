@@ -1,7 +1,7 @@
 module Sos.Template
   ( RawTemplate
   , Template
-  , parseTemplate
+  , parseTemplates
   , instantiateTemplate
   ) where
 
@@ -37,14 +37,17 @@ type RawTemplate = ByteString
 type Template = [Either Int ByteString]
 
 
-parseTemplate :: MonadThrow m => RawTemplate -> m Template
-parseTemplate raw_template =
+parseTemplates :: MonadThrow m => RawTemplate -> m [Template]
+parseTemplates raw_template =
   case readP_to_S parser (unpackBS raw_template) of
     [(template, "")] -> pure template
     _ -> throwM (SosCommandParseException raw_template)
  where
-  parser :: ReadP Template
-  parser = some (capturePart <|||> textPart) <* eof
+  parser :: ReadP [Template]
+  parser = sepBy parserSingle (packBS <$> string "||")
+
+  parserSingle :: ReadP Template
+  parserSingle = some (capturePart <|||> textPart) <* eof
    where
     capturePart :: ReadP Int
     capturePart = read <$> (char '\\' *> munch1 digit)
