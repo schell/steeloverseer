@@ -12,13 +12,14 @@ spec = do
       parseTemplates "" `shouldThrow` anySosException
 
     it "parses templates" $ do
-      parseTemplates "hi"            `shouldReturn` [[Right "hi"]]
-      parseTemplates "foo bar"       `shouldReturn` [[Right "foo bar"]]
-      parseTemplates "\\25"          `shouldReturn` [[Left 25]]
-      parseTemplates "gcc \\0"       `shouldReturn` [[Right "gcc ", Left 0]]
-      parseTemplates "hi||there"     `shouldReturn` [[Right "hi"], [Right "there"]]
-      parseTemplates "\\25||gcc \\0" `shouldReturn` [[Left 25], [Right "gcc ", Left 0]]
-      parseTemplates "hi|there"      `shouldReturn` [[Right "hi|there"]]
+      parseTemplates "hi"             `shouldReturn` [[Right "hi"]]
+      parseTemplates "foo bar"        `shouldReturn` [[Right "foo bar"]]
+      parseTemplates "\\25"           `shouldReturn` [[Left 25]]
+      parseTemplates "gcc \\0"        `shouldReturn` [[Right "gcc ", Left 0]]
+      parseTemplates "hi|||there"     `shouldReturn` [[Right "hi"], [Right "there"]]
+      parseTemplates "\\25|||gcc \\0" `shouldReturn` [[Left 25], [Right "gcc ", Left 0]]
+      parseTemplates "hi|there"       `shouldReturn` [[Right "hi|there"]]
+      parseTemplates "hi||there"      `shouldReturn` [[Right "hi||there"]]
 
   describe "instantiateTemplate" $ do
     it "ignores capture groups in templates with no captures" $ do

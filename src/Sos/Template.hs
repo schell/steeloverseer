@@ -45,7 +45,7 @@ parseTemplates raw_template =
     _ -> throwM (SosCommandParseException raw_template)
  where
   parser :: ReadP [Template]
-  parser = sepBy1 parserSingle (string "||") <* eof
+  parser = sepBy1 parserSingle (string "|||") <* eof
 
   parserSingle :: ReadP Template
   parserSingle = some (capturePart <|||> textPart)
@@ -56,7 +56,7 @@ parseTemplates raw_template =
       digit :: Char -> Bool
       digit c = c >= '0' && c <= '9'
     textPart :: ReadP ByteString
-    textPart = packBS . concat <$> liftM2 (:) textNoPipePart (Text.ParserCombinators.ReadP.many $ liftM2 (:) (char '|') textNoPipePart)
+    textPart = packBS . concat <$> liftM2 (:) textNoPipePart (Text.ParserCombinators.ReadP.many $ liftM2 (++) (string "|" +++ string "||") textNoPipePart)
      where
       textNoPipePart :: ReadP String
       textNoPipePart = munch1 (\s -> s /= '\\' && s /= '|')
