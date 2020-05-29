@@ -9,9 +9,11 @@ module Sos.Job
 import Sos.FileEvent
 import Sos.Utils
 
+import Control.Concurrent.Async (mapConcurrently)
 import Control.Concurrent.MVar (readMVar)
 import Control.Exception
 import Data.Function (on)
+import Data.List (find)
 import Data.List.NonEmpty (NonEmpty)
 import System.Exit
 import System.IO
@@ -33,8 +35,8 @@ type ShellCommand = String
 -- | A 'Job' is a list of shell commands to run, along with the 'FileEvent' that
 -- triggered the job.
 data Job = Job
-  { jobEvent    :: FileEvent             -- ^ Event that triggered this job.
-  , jobCommands :: NonEmpty ShellCommand -- ^ The list of shell commands to run.
+  { jobEvent    :: FileEvent               -- ^ Event that triggered this job.
+  , jobCommands :: NonEmpty [ShellCommand] -- ^ The list of lists of shell commands to run.
   }
 
 -- | Non-stanard Eq instance: Job equality compares only the shell commands it's
@@ -47,10 +49,10 @@ instance Eq Job where
 runJob :: Job -> IO ()
 runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
  where
-  go :: Int -> [ShellCommand] -> IO ()
+  go :: Int -> [[ShellCommand]] -> IO ()
   go _ [] = pure ()
   go n (cmd:cmds) = do
-    putStrLn (magenta (printf "[%d/%d] " n (length cmds0)) <> cmd)
+    putStrLn (magenta (printf "[%d/%d] " n (length cmds0)) <> unlines cmd)
 
     let flushStdin :: IO ()
         flushStdin =
@@ -60,8 +62,8 @@ runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
 
     flushStdin
 
-    try (runForegroundProcess (shell cmd)) >>= \case
-      Left (ex :: SomeException) -> do
+    try (mapConcurrently id (runForegroundProcess . shell <$> cmd)) >>= \case
+      Left (ex :: SomeException) ->
         case fromException ex of
           Just ThreadKilled -> do
             putStrLn (yellow "Job interrupted ✗")
@@ -70,12 +72,14 @@ runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
             putStrLn (red (show ex))
             throwIO ex
 
-      Right ExitSuccess -> do
-        putStrLn (green "Success ✓")
-        go (n+1) cmds
-
-      Right (ExitFailure c) ->
-        throwIO (ExitFailure c)
+      Right exitCodes ->
+        case find (/= ExitSuccess) exitCodes of
+          Nothing -> do
+            putStrLn (green "Success ✓")
+            go (n+1) cmds
+          Just (ExitFailure c) ->
+            throwIO (ExitFailure c)
+          Just ExitSuccess -> undefined -- TODO: handle this in a better way
 
 #ifdef mingw32_HOST_OS
 

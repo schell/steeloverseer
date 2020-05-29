@@ -216,10 +216,10 @@ main' Options{..} = do
 
   race_ (runManaged enqueue_thread) dequeue_thread
 
-eventCommands :: [Rule] -> FileEvent -> IO [ShellCommand]
+eventCommands :: [Rule] -> FileEvent -> IO [[ShellCommand]]
 eventCommands rules event = concat <$> mapM go rules
  where
-  go :: Rule -> IO [ShellCommand]
+  go :: Rule -> IO [[ShellCommand]]
   go rule =
     case (patternMatch, excludeMatch) of
       -- Pattern doesn't match
@@ -227,7 +227,7 @@ eventCommands rules event = concat <$> mapM go rules
       -- Pattern matches, but so does exclude pattern
       (_, True) -> pure []
       -- Pattern matches, and exclude pattern doesn't!
-      (xs, False) -> mapM (instantiateTemplate xs) (ruleTemplates rule)
+      (xs, False) -> mapM (mapM (instantiateTemplate xs)) (ruleTemplates rule)
 
    where
     patternMatch :: [ByteString]
