@@ -9,7 +9,7 @@ module Sos.Job
 import Sos.FileEvent
 import Sos.Utils
 
-import Control.Concurrent.Async (concurrently)
+import Control.Concurrent.Async (mapConcurrently)
 import Control.Concurrent.MVar (readMVar)
 import Control.Exception
 import Data.Function (on)
@@ -44,9 +44,6 @@ data Job = Job
 instance Eq Job where
   (==) = (==) `on` jobCommands
 
-parallel :: [IO a] -> IO [a]
-parallel = foldr (\io ios -> uncurry (:) <$> concurrently io ios) (pure [])
-
 -- | Run a Job's list of shell commands sequentially. If a command returns
 -- ExitFailure, or an exception is thrown, propagate the exception.
 runJob :: Job -> IO ()
@@ -55,7 +52,7 @@ runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
   go :: Int -> [[ShellCommand]] -> IO ()
   go _ [] = pure ()
   go n (cmd:cmds) = do
-    putStrLn (magenta (printf "[%d/%d] " n (length cmds0)) <> unwords cmd)
+    putStrLn (magenta (printf "[%d/%d] " n (length cmds0)) <> unlines cmd)
 
     let flushStdin :: IO ()
         flushStdin =
@@ -65,7 +62,7 @@ runJob (NonEmpty.toList . jobCommands -> cmds0) = go 1 cmds0
 
     flushStdin
 
-    try (parallel (runForegroundProcess . shell <$> cmd)) >>= \case
+    try (mapConcurrently id (runForegroundProcess . shell <$> cmd)) >>= \case
       Left (ex :: SomeException) ->
         case fromException ex of
           Just ThreadKilled -> do
