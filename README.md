@@ -115,3 +115,30 @@ For example, we may wish to run `hlint` on any modified `.hs` file:
 We can modify `foo.hs` and trigger `hlint foo.hs` to run. During its execution,
 modifying `bar.hs` will *enqueue* `hlint bar.hs`, while modifying `foo.hs` again
 will *re-run* `hlint foo.hs`.
+
+Transient Files
+---------------
+Sometimes text editors and other programs create short lived files in the 
+directories that `sos` is watching. These can trigger `sos` to run your 
+pipeline. This can often be avoided by using precise include syntax, ie 
+adding explicit matchers like an end-line match:
+
+```
+- pattern: .*\.tex$ 
+```
+
+Alternatively you may use exclude syntax to exclude any transient editor files 
+(eg here's an sosrc used for editing Haskell doctests and ignoring emac's flycheck files):
+
+```
+# This is for testing documentation
+- patterns:
+  - .*/[^_]*\.l?hs$
+  excludes:
+  - \#
+  - flycheck
+  commands:
+  - stack exec doctest -- \0
+```
+
+For more info, see https://github.com/schell/steeloverseer/issues/38
