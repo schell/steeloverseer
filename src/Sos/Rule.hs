@@ -11,7 +11,8 @@ import Sos.Template
 
 import Control.Applicative
 import Control.Monad.Catch (MonadThrow, throwM)
-import Data.Aeson.Types
+import Data.Aeson.Compat ((.:), FromJSON(..), Parser, Value(..))
+import Data.Aeson.Types (typeMismatch)
 import Data.ByteString (ByteString)
 import Data.ByteString.Internal (c2w)
 import Data.Either

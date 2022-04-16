@@ -33,6 +33,7 @@ default-extensions:
   - ViewPatterns
 
 dependencies:
+  - aeson-compat >= 0.3.10
   - async >= 2.0
   - base >= 4.0 && < 5.0
   - bytestring >= 0.10
