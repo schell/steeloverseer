@@ -8,6 +8,9 @@ commands in response. The first command to fail short circuits the series. The w
 be selected using regular expressions and the commands may include capture groups.
 
 [![Build Status](https://travis-ci.org/steeloverseer/steeloverseer.png?branch=master)](https://travis-ci.org/steeloverseer/steeloverseer)
+[![Build status](https://github.com/schell/steeloverseer/actions/workflows/stack.yml/badge.svg)](https://github.com/schell/steeloverseer/actions/workflows/stack.yml)
+[![Build status](https://github.com/schell/steeloverseer/actions/workflows/haskell-ci.yml/badge.svg)](https://github.com/schell/steeloverseer/actions/workflows/haskell-ci.yml)
+
 
 Installation
 ============

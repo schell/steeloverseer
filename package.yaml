@@ -20,6 +20,12 @@ extra-source-files:
 
 ghc-options: -Wall
 
+build-tool-depends:
+  hspec-discover
+
+tested-with:
+  - GHC==9.2.2
+
 default-extensions:
   - BangPatterns
   - DeriveDataTypeable
@@ -38,7 +44,7 @@ dependencies:
   - base >= 4.0 && < 5.0
   - bytestring >= 0.10
   - exceptions
-  - fsnotify >= 0.3
+  - fsnotify >= 0.3 && < 0.4
   - managed >= 1.0.1
   - mtl >= 2.2
   - regex-tdfa >= 1.2

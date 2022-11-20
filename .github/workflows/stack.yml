@@ -1,0 +1,15 @@
+# https://github.com/freckle/stack-action
+name: Stack
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: freckle/stack-action@v3
