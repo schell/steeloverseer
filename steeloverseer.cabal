@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           steeloverseer
-version:        2.1.0.0
+version:        2.1.0.1
 synopsis:       A file watcher and development tool.
 description:    A command line tool that responds to filesystem events. Allows the user to automatically execute commands after files are added or updated. Watches files using regular expressions.
 category:       Development
@@ -14,7 +14,7 @@ homepage:       https://github.com/schell/steeloverseer#readme
 bug-reports:    https://github.com/schell/steeloverseer/issues
 author:         Schell Scivally,
                 Mitchell Rosen
-maintainer:     schell@takt.com
+maintainer:     peterbecich@gmail.com
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
