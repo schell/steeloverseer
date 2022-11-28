@@ -16,7 +16,6 @@ import Data.Aeson.Types (typeMismatch)
 import Data.ByteString (ByteString)
 import Data.ByteString.Internal (c2w)
 import Data.Either
-import Data.Foldable (asum)
 import Data.Text (Text)
 import Text.Regex.TDFA
 import Text.Regex.TDFA.ByteString (compile)

@@ -7,7 +7,6 @@ module Sos.FileEvent
 import Sos.Utils
 
 import Data.ByteString (ByteString)
-import Data.Monoid ((<>))
 
 data FileEvent
   = FileAdded    ByteString

@@ -1,8 +1,8 @@
 name: steeloverseer
-version: 2.1.0.0
+version: 2.1.0.1
 license: BSD3
 license-file: LICENSE
-maintainer: schell@takt.com
+maintainer: peterbecich@gmail.com
 stability: stable
 github: schell/steeloverseer
 synopsis: A file watcher and development tool.
