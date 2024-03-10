@@ -11,6 +11,7 @@ be selected using regular expressions and the commands may include capture group
 [![Build status](https://github.com/schell/steeloverseer/actions/workflows/stack.yml/badge.svg)](https://github.com/schell/steeloverseer/actions/workflows/stack.yml)
 [![Build status](https://github.com/schell/steeloverseer/actions/workflows/haskell-ci.yml/badge.svg)](https://github.com/schell/steeloverseer/actions/workflows/haskell-ci.yml)
 
+Also see [`feedback` and other tools](https://github.com/NorfairKing/feedback?tab=readme-ov-file#comparison-with-other-tools).
 
 Installation
 ============
