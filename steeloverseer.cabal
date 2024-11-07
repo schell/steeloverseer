@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.0.
+-- This file has been generated from package.yaml by hpack version 0.37.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -55,19 +55,15 @@ library
       hspec-discover:hspec-discover
   build-depends:
       aeson >=0.8
-    , aeson-compat >=0.3.10
     , ansi-terminal >=0.6.2
     , async >=2.0
     , base >=4.0 && <5.0
     , bytestring >=0.10
-    , containers >=0.5
     , exceptions
     , fsnotify ==0.3.*
     , managed >=1.0.1
-    , mtl >=2.2
     , process ==1.6.*
     , regex-tdfa >=1.2
-    , semigroups >=0.16
     , stm >=2.4
     , streaming >=0.1.0 && <0.3
     , text >=1.2
@@ -94,8 +90,7 @@ executable sos
   build-tool-depends:
       hspec-discover:hspec-discover
   build-depends:
-      aeson-compat >=0.3.10
-    , async >=2.0
+      async >=2.0
     , base >=4.0 && <5.0
     , bytestring >=0.10
     , directory >=1.2
@@ -103,19 +98,14 @@ executable sos
     , filepath >=1.3
     , fsnotify ==0.3.*
     , managed >=1.0.1
-    , mtl >=2.2
     , optparse-applicative >=0.11
     , regex-tdfa >=1.2
-    , semigroups >=0.16
     , steeloverseer
     , stm >=2.4
     , streaming >=0.1.0 && <0.3
     , text >=1.2
     , yaml >=0.8
   default-language: Haskell2010
-  if os(darwin)
-    build-depends:
-        hfsevents >=0.1.3
 
 test-suite spec
   type: exitcode-stdio-1.0
@@ -140,17 +130,14 @@ test-suite spec
   build-tool-depends:
       hspec-discover:hspec-discover
   build-depends:
-      aeson-compat >=0.3.10
-    , async >=2.0
+      async >=2.0
     , base >=4.0 && <5.0
     , bytestring >=0.10
     , exceptions
     , fsnotify ==0.3.*
     , hspec
     , managed >=1.0.1
-    , mtl >=2.2
     , regex-tdfa >=1.2
-    , semigroups >=0.16
     , steeloverseer
     , stm >=2.4
     , streaming >=0.1.0 && <0.3
