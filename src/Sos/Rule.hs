@@ -11,12 +11,11 @@ import Sos.Template
 
 import Control.Applicative
 import Control.Monad.Catch (MonadThrow, throwM)
-import Data.Aeson.Compat ((.:), FromJSON(..), Parser, Value(..))
-import Data.Aeson.Types (typeMismatch)
+import Data.Aeson ((.:), FromJSON(..), Value(..))
+import Data.Aeson.Types (Parser, typeMismatch)
 import Data.ByteString (ByteString)
 import Data.ByteString.Internal (c2w)
 import Data.Either
-import Data.Text (Text)
 import Text.Regex.TDFA
 import Text.Regex.TDFA.ByteString (compile)
 
@@ -118,7 +117,6 @@ instance FromJSON RawRule where
     parseCommands :: Parser [RawTemplate]
     parseCommands = go ["command", "commands"]
 
-    go :: [Text] -> Parser [ByteString]
     go = fmap (map Text.encodeUtf8 . listify) . asum . map (o .:)
   parseJSON v = typeMismatch "command" v
 
