@@ -1,7 +1,7 @@
 module Sos.Template
   ( RawTemplate
   , Template
-  , parseTemplate
+  , parseTemplates
   , instantiateTemplate
   ) where
 
@@ -10,6 +10,7 @@ import Sos.Job (ShellCommand)
 import Sos.Utils
 
 import Control.Applicative
+import Control.Monad (liftM2)
 import Control.Monad.Catch (MonadThrow, throwM)
 import Data.ByteString (ByteString)
 import Text.ParserCombinators.ReadP
@@ -37,23 +38,28 @@ type RawTemplate = ByteString
 type Template = [Either Int ByteString]
 
 
-parseTemplate :: MonadThrow m => RawTemplate -> m Template
-parseTemplate raw_template =
+parseTemplates :: MonadThrow m => RawTemplate -> m [Template]
+parseTemplates raw_template =
   case readP_to_S parser (unpackBS raw_template) of
     [(template, "")] -> pure template
     _ -> throwM (SosCommandParseException raw_template)
  where
-  parser :: ReadP Template
-  parser = some (capturePart <|||> textPart) <* eof
+  parser :: ReadP [Template]
+  parser = sepBy1 parserSingle (string "|||") <* eof
+
+  parserSingle :: ReadP Template
+  parserSingle = some (capturePart <|||> textPart)
    where
     capturePart :: ReadP Int
     capturePart = read <$> (char '\\' *> munch1 digit)
      where
       digit :: Char -> Bool
       digit c = c >= '0' && c <= '9'
-
     textPart :: ReadP ByteString
-    textPart = packBS <$> munch1 (/= '\\')
+    textPart = packBS . concat <$> liftM2 (:) textNoPipePart (Text.ParserCombinators.ReadP.many $ liftM2 (++) (string "|" +++ string "||") textNoPipePart)
+     where
+      textNoPipePart :: ReadP String
+      textNoPipePart = munch1 (\s -> s /= '\\' && s /= '|')
 
 -- Instantiate a template with a list of captured variables, per their indices.
 --
